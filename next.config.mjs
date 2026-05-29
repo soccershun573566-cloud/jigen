@@ -1,17 +1,8 @@
-import withSerwistInit from '@serwist/next';
-
-const withSerwist = withSerwistInit({
-  swSrc: 'workers/service-worker.ts',
-  swDest: 'public/sw.js',
-  cacheOnNavigation: true,
-  reloadOnOnline: true,
-});
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  // MVP: ESLint/TypeScript エラーでビルドが落ちないように一時無効化(後でCI側で再チェック)
+  // MVP: ESLint/TypeScript エラーでビルドが落ちないように一時無効化
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -31,19 +22,6 @@ const nextConfig = {
       },
     ],
   },
-  async headers() {
-    return [
-      {
-        source: '/(.*)',
-        headers: [
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'X-Frame-Options', value: 'DENY' },
-          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-        ],
-      },
-    ];
-  },
 };
 
-export default withSerwist(nextConfig);
+export default nextConfig;
