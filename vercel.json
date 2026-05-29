@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/generate-daily-tasks",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/send-morning-push",
+      "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/cron/downgrade-expired-trials",
+      "schedule": "30 15 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-report",
+      "schedule": "0 12 * * 0"
+    }
+  ]
+}
