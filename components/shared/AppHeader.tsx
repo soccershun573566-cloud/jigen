@@ -1,8 +1,17 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Settings } from 'lucide-react';
 
 // 認証必須ルートのヘッダ。タブと役割を分離するため上部は最小情報のみ。
+// 2026-05-30: ホーム v2(ダーク+ゴールド)は独自ヘッダを持つため、/home では非表示。
 export function AppHeader() {
+  const pathname = usePathname() ?? '/';
+  if (pathname === '/home' || pathname === '/') {
+    return null;
+  }
+
   return (
     <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">

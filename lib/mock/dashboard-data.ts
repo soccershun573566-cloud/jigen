@@ -5,52 +5,113 @@
 
 import type { QuestionSection } from '@/types/domain';
 
-// ----- ホーム (S05) -----
+// ----- ホーム v2 (2026-05-30 大刷新: ダーク+ゴールド+ティラノ先生) -----
+// 旧 getHomeSummary / WeeklyDot / HomeSummary は CEO 大方針転換で廃止。
 
-export type WeeklyDot = {
-  /** ラベル(月/火/水/木/金/土/日) */
+export type ExamMockBlock = {
+  /** 模試期間中か */
+  active: boolean;
+  /** 期間表記("5/26 - 5/31" 等) */
+  periodLabel: string;
+  /** 午前の達成率 (0-100) */
+  amProgress: number;
+  /** 午後の達成率 (0-100) */
+  pmProgress: number;
+};
+
+export type GrowthRecord = {
+  /** 現在のヘルメット階級表示("シルバー" 等) */
+  helmetRank: string;
+  /** 連続学習日数(今回は前向きに主役化する) */
+  streakDays: number;
+};
+
+export type SidebarItem = {
   label: string;
-  /** その日に学習したか */
-  studied: boolean;
-  /** その日が「今日」か */
-  isToday: boolean;
+  href: string;
 };
 
-export type HomeSummary = {
-  /** 累計学習日(ユウ§4.1: 連続日数の代替) */
-  totalStudyDays: number;
-  /** 今週の学習日数(7日中の n 日) */
-  weekStudyDays: number;
-  /** ウィークリーマップ(月→日の順) */
-  weekMap: WeeklyDot[];
-  /** AI 一言(2行・励まし禁止・観察ベース) */
-  aiNote: string;
-  /** 今日のタスク残り問題数 */
-  remainingQuestions: number;
-  /** 推定所要分 */
-  estimatedMinutes: number;
-  /** 最初に取り組む問題ID(モック UUID) */
-  firstQuestionId: string;
+export type HomeV2Data = {
+  /** 試験名(ヘッダ中央) */
+  examTitle: string;
+  /** 試験日(yyyy-mm-dd) */
+  examDate: string;
+  /** 残り日数 */
+  daysLeft: number;
+
+  /** 今日の問題(メインカード) */
+  today: {
+    /** 今日のトータル問題数 */
+    totalQuestions: number;
+    /** 既に解いた問題数 */
+    solvedQuestions: number;
+    /** 進捗率 (0-100) */
+    progressPct: number;
+    /** スタートさせる起点問題ID */
+    startQuestionId: string;
+  };
+
+  /** 月末模試セクション */
+  examMock: ExamMockBlock;
+
+  /** 現在判定 (A/B/C/D) */
+  currentJudgment: string;
+  /** 現在地ラベル ("苦手改善期" 等) */
+  currentPhase: string;
+  /** 継続日数 */
+  streakDays: number;
+
+  /** 次回小テスト("明日 20:00" 等) */
+  nextQuiz: string;
+
+  /** 恐竜の成長記録(サイドバー下部) */
+  growth: GrowthRecord;
+
+  /** AIコメント(ティラノ先生)。今回は励まし系OK。 */
+  aiComment: string;
+
+  /** 警告(該当時のみ非null) */
+  warning: string | null;
+
+  /** サイドバー項目 */
+  sidebarItems: SidebarItem[];
 };
 
-export function getHomeSummary(): HomeSummary {
+export function getHomeV2(): HomeV2Data {
   return {
-    totalStudyDays: 23,
-    weekStudyDays: 4,
-    weekMap: [
-      { label: '月', studied: true, isToday: false },
-      { label: '火', studied: true, isToday: false },
-      { label: '水', studied: false, isToday: false },
-      { label: '木', studied: true, isToday: false },
-      { label: '金', studied: true, isToday: true },
-      { label: '土', studied: false, isToday: false },
-      { label: '日', studied: false, isToday: false },
+    examTitle: '1級建築施工管理技士',
+    examDate: '2025-06-08',
+    daysLeft: 82,
+    today: {
+      totalQuestions: 25,
+      solvedQuestions: 12,
+      progressPct: 48,
+      startQuestionId: 'q-mock-0001',
+    },
+    examMock: {
+      active: true,
+      periodLabel: '5/26 (月) - 5/31 (土)',
+      amProgress: 72,
+      pmProgress: 58,
+    },
+    currentJudgment: 'B',
+    currentPhase: '苦手改善期',
+    streakDays: 14,
+    nextQuiz: '明日 20:00〜',
+    growth: {
+      helmetRank: 'シルバー',
+      streakDays: 14,
+    },
+    aiComment:
+      'よく頑張ってるよ! 施工管理の問題の正答率が上がってきたね! ただ、法規の正答率が少し低いよ。明日は法規を重点的にやっていこう!',
+    warning: '注意:法規の正答率が55%を下回っています',
+    sidebarItems: [
+      { label: 'プロフィール', href: '/settings' },
+      { label: 'AI相談所', href: '/practice' },
+      { label: '◯× クイズ', href: '/practice' },
+      { label: '建築豆知識', href: '/mastery' },
+      { label: '間違えリスト', href: '/review' },
     ],
-    aiNote:
-      '今週は躯体の数値判定で安定して取れています。\n今日は法規の改正論点を1問混ぜています。',
-    remainingQuestions: 6,
-    estimatedMinutes: 9,
-    firstQuestionId: 'q-mock-0001',
   };
 }
 

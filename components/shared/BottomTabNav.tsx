@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, BookOpen, Sparkles, Settings } from 'lucide-react';
+import { Home, History, BarChart3, ClipboardCheck, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// 下部タブナビ(ユウ§3: ホーム / 演習 / 弱点 / 設定)
-// - 現在位置をハイライト
+// 下部タブナビ(2026-05-30 大刷新: 旧「演習/伸びしろ」→ 新「学習履歴/分析/模試」)
+// - 5タブ構成: ホーム / 学習履歴 / 分析 / 模試 / 設定
+// - 配色: ダーク背景 + ゴールドアクセント(ホーム v2 と統一)
 // - タップ領域 56px 以上(現場片手操作 + a11y)
-// - 「振り返り」はホームと演習完了動線で出すため、タブからは外す
 
 type Tab = {
   href: string;
@@ -26,16 +26,24 @@ const TABS: Tab[] = [
     match: (p) => p === '/home' || p === '/',
   },
   {
-    href: '/practice',
-    label: '演習',
-    Icon: BookOpen,
-    match: (p) => p.startsWith('/practice'),
+    href: '/review',
+    label: '学習履歴',
+    Icon: History,
+    // 既存の /review(振り返り)を学習履歴の入口として暫定流用。後で専用画面に差し替え。
+    match: (p) => p.startsWith('/review') || p.startsWith('/weekly'),
   },
   {
     href: '/mastery',
-    label: '伸びしろ',
-    Icon: Sparkles,
+    label: '分析',
+    Icon: BarChart3,
     match: (p) => p.startsWith('/mastery'),
+  },
+  {
+    href: '/practice',
+    label: '模試',
+    Icon: ClipboardCheck,
+    // 模試画面は別途実装。当面は /practice を入口に流す。
+    match: (p) => p.startsWith('/practice'),
   },
   {
     href: '/settings',
@@ -51,9 +59,9 @@ export function BottomTabNav() {
   return (
     <nav
       aria-label="メイン"
-      className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-jigen-border-soft bg-jigen-bg-dark/95 backdrop-blur"
     >
-      <ul className="mx-auto grid max-w-3xl grid-cols-4">
+      <ul className="mx-auto grid max-w-3xl grid-cols-5">
         {TABS.map(({ href, label, Icon, match }) => {
           const active = match(pathname);
           return (
@@ -62,13 +70,18 @@ export function BottomTabNav() {
                 href={href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex min-h-[56px] flex-col items-center justify-center gap-1 py-2 text-xs',
-                  active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+                  'flex min-h-[56px] flex-col items-center justify-center gap-1 py-2 text-[11px] transition-colors',
+                  active
+                    ? 'text-jigen-gold'
+                    : 'text-jigen-ink-mute hover:text-jigen-ink',
                 )}
               >
                 <Icon
                   aria-hidden
-                  className={cn('h-5 w-5', active && 'stroke-[2.25px]')}
+                  className={cn(
+                    'h-5 w-5',
+                    active && 'stroke-[2.25px] drop-shadow-[0_0_6px_rgba(245,196,65,0.45)]',
+                  )}
                 />
                 <span className={cn(active && 'font-semibold')}>{label}</span>
               </Link>
