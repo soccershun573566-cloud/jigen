@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
 /**
@@ -77,14 +76,15 @@ export function TiranoSensei({
         className,
       )}
     >
-      <Image
-        src="/mascot/tirano-sensei-home.png"
-        alt={a11yLabel}
-        fill
-        sizes="(max-width: 768px) 100vw, 200px"
-        className="object-contain"
-        priority={size === 'xl'}
-      />
+      {/* 暫定アイコン: 画像生成完了したら ↓ をそのまま <Image src=... fill /> に置換 */}
+      <div className="flex flex-col items-center justify-center gap-1">
+        <span aria-hidden className="text-5xl leading-none drop-shadow-lg">
+          🦖
+        </span>
+        <span aria-hidden className="text-[10px] font-semibold tracking-wider text-jigen-gold">
+          TIRANO
+        </span>
+      </div>
       {helmetRank ? (
         <span
           aria-hidden
