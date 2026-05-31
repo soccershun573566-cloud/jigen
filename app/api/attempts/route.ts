@@ -180,6 +180,13 @@ export async function POST(req: Request) {
         masteryP: newP,
       },
       nextRecommendation,
+      // 一時デバッグ情報(原因特定後に削除)
+      _debug: {
+        rawUserAnswer: userAnswer,
+        rawCorrectAnswer: question.answer,
+        normalizedUser: normalizeAnswer(userAnswer),
+        normalizedCorrect: normalizeAnswer(question.answer),
+      },
     });
   } catch (err) {
     if (err instanceof Response) return err;
@@ -240,19 +247,19 @@ function scoreAttempt(
  */
 function normalizeAnswer(v: unknown): string {
   if (v == null) return '';
-  if (typeof v === 'number') return String(v);
-  if (typeof v === 'string') return v.trim();
-  if (Array.isArray(v)) {
-    return JSON.stringify(
-      v
-        .map((x) => (typeof x === 'number' ? String(x) : String(x).trim()))
-        .sort(),
-    );
-  }
-  if (typeof v === 'object') {
+  if (typeof v === 'object' && !Array.isArray(v)) {
     const obj = v as { value?: unknown; answer?: unknown };
     if (obj.value !== undefined) return normalizeAnswer(obj.value);
     if (obj.answer !== undefined) return normalizeAnswer(obj.answer);
+    return JSON.stringify(v);
   }
-  return JSON.stringify(v);
+  if (Array.isArray(v)) {
+    return JSON.stringify(v.map((x) => normalizeAnswer(x)).sort());
+  }
+  const s = String(v).trim();
+  // 数字文字列なら数値化して正規化(例: " 3 " → "3", "03" → "3")
+  if (/^-?\d+(\.\d+)?$/.test(s)) {
+    return String(Number(s));
+  }
+  return s;
 }

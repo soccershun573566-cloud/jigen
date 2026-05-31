@@ -165,7 +165,7 @@ export function PracticeRunner({ question }: { question: RunnerQuestion }) {
                 type="button"
                 onClick={() => submitAnswer(i)}
                 disabled={disabled}
-                aria-label={`選択肢 ${String.fromCharCode(65 + i)}: ${label}`}
+                aria-label={`選択肢 ${i + 1}: ${label}`}
                 className={cn(
                   'flex w-full items-start gap-3 rounded-lg border bg-jigen-bg-panel p-3 text-left text-[15px] leading-relaxed min-h-[48px]',
                   'border-jigen-border-soft transition-colors',
@@ -191,7 +191,7 @@ export function PracticeRunner({ question }: { question: RunnerQuestion }) {
                   ) : isWrongPicked ? (
                     <X className="h-3.5 w-3.5" />
                   ) : (
-                    String.fromCharCode(65 + i)
+                    i + 1
                   )}
                 </span>
                 <span className="flex-1">{label}</span>
