@@ -34,6 +34,8 @@ alter table public.mastery_profiles enable row level security;
 create policy "mastery_self_select" on public.mastery_profiles
   for select using (auth.uid() = user_id);
 -- update/insert は service_role 経由のみ
+--   実装: app/api/attempts/route.ts で createAdminClient() を使って UPSERT する。
+--   anon/auth ロールでは insert/update ポリシーが無いため RLS で弾かれる(意図通り)。
 
 -- ====================================================================
 -- daily_tasks

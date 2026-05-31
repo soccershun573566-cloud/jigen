@@ -1,43 +1,33 @@
 'use client';
 
+// 旧:解説画面下部の [理解した] [後で復習] CTA。
+// 2026-05-31 ナギ:演習runner側に統合済み。互換性のため最小実装だけ残す。
+// (まだ参照している箇所があれば、見つけ次第 PracticeRunner 側に寄せる)
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { getNextQuestionId } from '@/lib/mock/dashboard-data';
 
-// 解説画面下部の [理解した] [後で復習] CTA。
-// モックなので localStorage 等への永続化は行わず、ボタン押下のフィードバックのみ表示する。
-export function ExplanationActions({ questionId }: { questionId: string }) {
+export function ExplanationActions(_props: { questionId: string }) {
   const router = useRouter();
-  const [marked, setMarked] = useState<'understood' | 'later' | null>(null);
 
   function goNext() {
-    const nextId = getNextQuestionId(questionId);
-    router.push(nextId ? `/practice/${nextId}` : '/review');
+    router.push('/practice/random');
   }
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row">
       <Button
         variant="outline"
-        className="flex-1"
-        onClick={() => {
-          setMarked('later');
-          goNext();
-        }}
+        className="flex-1 border-jigen-border-soft text-jigen-ink hover:border-jigen-gold/60 hover:bg-jigen-bg-panel-2"
+        onClick={goNext}
       >
         後で復習
       </Button>
       <Button
-        className="flex-1"
-        onClick={() => {
-          setMarked('understood');
-          goNext();
-        }}
+        className="flex-1 bg-gold-gradient text-jigen-bg-dark hover:opacity-90"
+        onClick={goNext}
       >
-        理解した
+        次の問題へ
       </Button>
-      {marked && <span className="sr-only">記録しました</span>}
     </div>
   );
 }

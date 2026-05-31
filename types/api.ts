@@ -80,6 +80,23 @@ export const QuestionResponse = z.object({
 });
 export type QuestionResponse = z.infer<typeof QuestionResponse>;
 
+// ============ /api/practice/next ============
+// ハルの route.ts に対応。Question 1件 + 残数メタ。
+export const PracticeNextResponse = z.object({
+  id: z.string().uuid(),
+  year: z.number(),
+  qNumber: z.number(),
+  section: z.string(),
+  subTopic: z.string(),
+  difficulty: z.number(),
+  bodyMd: z.string(),
+  choices: z.unknown(),
+  isNumeric: z.boolean(),
+  remainingToday: z.number(),
+  totalPublished: z.number(),
+});
+export type PracticeNextResponse = z.infer<typeof PracticeNextResponse>;
+
 // ============ /api/attempts (POST) ============
 export const AttemptRequest = z.object({
   questionId: z.string().uuid(),
@@ -90,18 +107,38 @@ export const AttemptRequest = z.object({
 });
 export type AttemptRequest = z.infer<typeof AttemptRequest>;
 
+// ハル → ナギ:
+//   AttemptSubmitResponse は AttemptResponse のエイリアス。
+//   採点後だけ correctAnswer / explanation を返す設計。
+//   後方互換のため explanationMd キーも残しているが、新規実装は explanation を使うこと。
+export const NextRecommendation = z.object({
+  reason: z.enum(['review_same_topic', 'next_random']),
+  subTopic: z.string().nullable(),
+  href: z.string(),
+});
+export type NextRecommendation = z.infer<typeof NextRecommendation>;
+
 export const AttemptResponse = z.object({
   id: z.string().uuid(),
   isCorrect: z.boolean(),
   isNearMiss: z.boolean(),
   correctAnswer: z.unknown(),
+  explanation: z.string(),
+  // 後方互換(旧クライアント向け)
   explanationMd: z.string(),
   masteryUpdated: z.object({
     subTopic: z.string(),
     masteryP: z.number(),
   }),
+  nextRecommendation: NextRecommendation.nullable(),
 });
 export type AttemptResponse = z.infer<typeof AttemptResponse>;
+
+// エイリアス: ナギは AttemptSubmitRequest / AttemptSubmitResponse でも import 可能
+export const AttemptSubmitRequest = AttemptRequest;
+export type AttemptSubmitRequest = AttemptRequest;
+export const AttemptSubmitResponse = AttemptResponse;
+export type AttemptSubmitResponse = AttemptResponse;
 
 // ============ /api/mastery ============
 export const MasteryResponse = z.object({
