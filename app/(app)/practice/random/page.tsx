@@ -1,23 +1,37 @@
 'use client';
 
-// S06 /practice/random — ランダムに1問引いて /practice/{id} へ replace
-// CEO指示(2026-05-31): 実APIで動かす。ハル実装の GET /api/practice/next を叩く。
-// ローディング中はティラノ先生 + 「問題を選んでいます...」表示。
-// 失敗時は「再読み込み」CTA。
+// /practice/random — ランダム1問を取得して、その場で表示
+// 高速化: リダイレクトせず、API 1回で取得 → そのまま PracticeRunner に渡す
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
 import { Button } from '@/components/ui/button';
+import { PracticeRunner, type RunnerQuestion } from '@/components/practice/PracticeRunner';
 import type { PracticeNextResponse } from '@/types/api';
 
-type Phase = 'loading' | 'error' | 'done';
+type Phase = 'loading' | 'error' | 'ready';
+
+function extractChoices(choicesRaw: unknown): string[] {
+  if (Array.isArray(choicesRaw)) {
+    return (choicesRaw as unknown[]).filter((x) => typeof x === 'string') as string[];
+  }
+  if (choicesRaw && typeof choicesRaw === 'object') {
+    const items = (choicesRaw as { items?: unknown }).items;
+    if (Array.isArray(items)) {
+      return (items as unknown[]).filter((x) => typeof x === 'string') as string[];
+    }
+  }
+  return [];
+}
 
 export default function PracticeRandomPage() {
-  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tQuery = searchParams.get('t'); // 「次の問題へ」遷移時のキャッシュバスト
   const [phase, setPhase] = useState<Phase>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('読み込みに失敗しました');
   const [reloadKey, setReloadKey] = useState(0);
+  const [question, setQuestion] = useState<RunnerQuestion | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,11 +48,25 @@ export default function PracticeRandomPage() {
           const j = await res.json().catch(() => null);
           throw new Error(j?.error?.message ?? `HTTP ${res.status}`);
         }
-        const data = (await res.json()) as PracticeNextResponse;
+        const data = (await res.json()) as PracticeNextResponse & {
+          choices?: unknown;
+          isNumeric?: boolean;
+        };
         if (cancelled) return;
         if (!data?.id) throw new Error('問題が取得できませんでした');
-        setPhase('done');
-        router.replace(`/practice/${data.id}`);
+
+        const choices = extractChoices(data.choices);
+        setQuestion({
+          id: data.id,
+          year: data.year,
+          qNumber: data.qNumber,
+          section: data.section,
+          subTopic: data.subTopic,
+          bodyMd: data.bodyMd,
+          choices,
+          isNumeric: !!data.isNumeric,
+        });
+        setPhase('ready');
       } catch (e) {
         if (cancelled) return;
         setErrorMessage((e as Error).message || '読み込みに失敗しました');
@@ -49,7 +77,11 @@ export default function PracticeRandomPage() {
     return () => {
       cancelled = true;
     };
-  }, [router, reloadKey]);
+  }, [reloadKey, tQuery]);
+
+  if (phase === 'ready' && question) {
+    return <PracticeRunner question={question} />;
+  }
 
   return (
     <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-md flex-col items-center justify-center gap-6 px-5 py-10 text-jigen-ink">
@@ -63,7 +95,7 @@ export default function PracticeRandomPage() {
               Loading
             </p>
             <p className="text-sm text-jigen-ink-soft">
-              ティラノ先生が問題を選んでいます...
+              次の問題を選んでいます...
             </p>
           </div>
           <span className="sr-only" aria-live="polite">
@@ -96,10 +128,6 @@ export default function PracticeRandomPage() {
             </Link>
           </div>
         </>
-      ) : null}
-
-      {phase === 'done' ? (
-        <p className="text-sm text-jigen-ink-mute">移動中...</p>
       ) : null}
     </div>
   );

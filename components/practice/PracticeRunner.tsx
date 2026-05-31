@@ -70,13 +70,20 @@ export function PracticeRunner({ question }: { question: RunnerQuestion }) {
     if (result && !result.isCorrect) setExplanationOpen(true);
   }, [result]);
 
-  async function submitAnswer(idx: number) {
+  // 選択肢タップ: ハイライトのみ(まだ送信しない)
+  function pickChoice(idx: number) {
     if (phase !== 'answering') return;
     setSelectedIdx(idx);
+  }
+
+  // 「解答する」ボタン押下時に送信
+  async function confirmAnswer() {
+    if (phase !== 'answering') return;
+    if (selectedIdx === null) return;
+    const idx = selectedIdx;
     setPhase('submitting');
 
     // DB の questions.answer は「正答番号(1始まり)」で格納。
-    // クライアントは選択肢テキストではなく「番号(1始まり)」を送る。
     const userAnswer = { value: idx + 1 };
     const responseSeconds = Math.max(
       0,
@@ -108,7 +115,9 @@ export function PracticeRunner({ question }: { question: RunnerQuestion }) {
   }
 
   function handleNext() {
-    router.push('/practice/random');
+    // 既に /practice/random にいる場合でも新しい問題に切り替わるように、
+    // クエリにタイムスタンプを付けて再ナビゲートする(Next.js が再fetchする)
+    router.push(`/practice/random?t=${Date.now()}`);
   }
 
   // 正解選択肢のラベル(API レスポンスから推定)
@@ -163,7 +172,7 @@ export function PracticeRunner({ question }: { question: RunnerQuestion }) {
             <li key={i}>
               <button
                 type="button"
-                onClick={() => submitAnswer(i)}
+                onClick={() => pickChoice(i)}
                 disabled={disabled}
                 aria-label={`選択肢 ${i + 1}: ${label}`}
                 className={cn(
@@ -200,6 +209,29 @@ export function PracticeRunner({ question }: { question: RunnerQuestion }) {
           );
         })}
       </ul>
+
+      {/* 解答ボタン(誤タップ防止: 選択→確認→送信) */}
+      {(phase === 'answering' || phase === 'submitting') ? (
+        <div className="sticky bottom-4 z-10 flex justify-center">
+          <Button
+            type="button"
+            onClick={confirmAnswer}
+            disabled={selectedIdx === null || phase === 'submitting'}
+            className="h-14 min-w-[240px] rounded-xl bg-gold-gradient px-8 text-base font-bold text-slate-900 shadow-gold-glow transition-transform hover:scale-[1.02] hover:shadow-gold-glow-strong disabled:opacity-50 disabled:hover:scale-100"
+            aria-label={
+              selectedIdx === null
+                ? '選択肢を選んでから解答してください'
+                : `選択肢 ${selectedIdx + 1} で解答する`
+            }
+          >
+            {phase === 'submitting'
+              ? '採点中...'
+              : selectedIdx === null
+                ? '選択肢を選んでください'
+                : `解答する(${selectedIdx + 1}を選択中)`}
+          </Button>
+        </div>
+      ) : null}
 
       {/* エラー */}
       {phase === 'error' ? (
