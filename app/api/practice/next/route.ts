@@ -11,7 +11,7 @@
  * ナギ側: types/api.ts の PracticeNextResponse を import すること。
  */
 import { NextResponse } from 'next/server';
-import { and, eq, gte, sql } from 'drizzle-orm';
+import { and, eq, gte, notInArray, sql } from 'drizzle-orm';
 import { requireUser } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { questions, attempts } from '@/db/schema';
@@ -98,7 +98,7 @@ async function pickRandomPublished(excludeIds: string[]) {
         .select()
         .from(questions)
         .where(
-          sql`${questions.published} = true and ${questions.id} <> all(${excludeIds}::uuid[])`,
+          and(eq(questions.published, true), notInArray(questions.id, excludeIds)),
         )
         .orderBy(sql`random()`)
         .limit(1)
