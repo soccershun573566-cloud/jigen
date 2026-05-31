@@ -176,11 +176,13 @@ export function PracticeRunner({ question }: { question: RunnerQuestion }) {
                 disabled={disabled}
                 aria-label={`選択肢 ${i + 1}: ${label}`}
                 className={cn(
-                  'flex w-full items-start gap-3 rounded-lg border bg-jigen-bg-panel p-3 text-left text-[15px] leading-relaxed min-h-[48px]',
-                  'border-jigen-border-soft transition-colors',
+                  'relative flex w-full items-start gap-3 rounded-lg border-2 bg-jigen-bg-panel p-3 text-left text-[15px] leading-relaxed min-h-[48px]',
+                  'border-jigen-border-soft transition-all duration-150',
                   'hover:border-jigen-gold/50 hover:bg-jigen-bg-panel-2',
                   'focus:outline-none focus-visible:ring-2 focus-visible:ring-jigen-gold focus-visible:ring-offset-2 focus-visible:ring-offset-jigen-bg-dark',
                   'disabled:cursor-default disabled:hover:border-jigen-border-soft disabled:hover:bg-jigen-bg-panel',
+                  // 選択中(回答前): 強くハイライト
+                  isPicked && phase === 'answering' && 'border-jigen-gold bg-jigen-gold/10 shadow-gold-glow ring-2 ring-jigen-gold/40',
                   isPicked && phase === 'submitting' && 'border-jigen-gold/60 bg-jigen-bg-panel-2',
                   isCorrectOne && 'border-jigen-gold bg-jigen-bg-panel-2 text-jigen-gold shadow-gold-glow',
                   isWrongPicked && 'border-jigen-warning bg-jigen-warning-soft/30 text-jigen-ink',
@@ -189,8 +191,10 @@ export function PracticeRunner({ question }: { question: RunnerQuestion }) {
                 <span
                   aria-hidden
                   className={cn(
-                    'mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold',
+                    'mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-[13px] font-bold transition-all',
                     'border-jigen-border-soft text-jigen-ink-soft',
+                    // 選択中: 番号ラベルもゴールド塗りつぶし
+                    isPicked && phase === 'answering' && 'border-jigen-gold bg-jigen-gold text-jigen-bg-dark scale-110',
                     isCorrectOne && 'border-jigen-gold bg-jigen-gold text-jigen-bg-dark',
                     isWrongPicked && 'border-jigen-warning bg-jigen-warning text-jigen-ink',
                   )}
