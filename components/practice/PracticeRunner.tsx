@@ -75,7 +75,9 @@ export function PracticeRunner({ question }: { question: RunnerQuestion }) {
     setSelectedIdx(idx);
     setPhase('submitting');
 
-    const userAnswer = { value: question.choices[idx] ?? '' };
+    // DB の questions.answer は「正答番号(1始まり)」で格納。
+    // クライアントは選択肢テキストではなく「番号(1始まり)」を送る。
+    const userAnswer = { value: idx + 1 };
     const responseSeconds = Math.max(
       0,
       Math.round((Date.now() - startedAt) / 1000),
