@@ -67,8 +67,9 @@ export function TodayQuestionCard({ today }: Props) {
           </div>
 
           {/* CTA */}
+          {/* 今日のタスクが未生成の現状は、ランダム1問を引く /practice/random に飛ばす */}
           <Link
-            href={`/practice/${startQuestionId}`}
+            href="/practice/random"
             className="mt-6 inline-flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-gold-gradient px-6 text-base font-bold text-slate-900 shadow-gold-glow transition-transform hover:scale-[1.01] hover:shadow-gold-glow-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-jigen-gold-bright focus-visible:ring-offset-2 focus-visible:ring-offset-jigen-bg-dark sm:w-auto"
           >
             今日の問題をスタート

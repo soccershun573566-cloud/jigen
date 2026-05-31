@@ -51,11 +51,16 @@ export default async function QuestionPage({ params }: Props) {
     notFound();
   }
 
-  // choices JSON を整形(現状の seed は { type:'choice', items:string[] })
-  const choices = q.choices as ChoiceQuestion | { items?: string[] } | null;
-  const items: string[] = Array.isArray((choices as ChoiceQuestion)?.items)
-    ? (choices as ChoiceQuestion).items
-    : [];
+  // choices JSON を整形
+  // 対応形式: (A) 生の配列 ["...","..."] (CSVインポート由来)
+  //          (B) { items:string[] } 形式 (seed由来)
+  const choicesRaw = q.choices as unknown;
+  let items: string[] = [];
+  if (Array.isArray(choicesRaw)) {
+    items = (choicesRaw as unknown[]).filter((x) => typeof x === 'string') as string[];
+  } else if (choicesRaw && typeof choicesRaw === 'object' && Array.isArray((choicesRaw as { items?: unknown }).items)) {
+    items = ((choicesRaw as { items: unknown[] }).items).filter((x) => typeof x === 'string') as string[];
+  }
 
   return (
     <PracticeRunner
