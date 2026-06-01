@@ -242,10 +242,12 @@ export default async function ProfilePage() {
     <main className="mx-auto w-full max-w-3xl px-4 py-5 text-jigen-ink">
       {/* ヘッダ */}
       <div className="mb-4 flex items-center gap-2">
-        <h1 className="text-lg font-bold">プロフィール</h1>
+        <h1 className="text-2xl font-extrabold tracking-wide text-jigen-ink drop-shadow-[0_0_8px_rgba(245,196,65,0.25)]">
+          プロフィール
+        </h1>
         <Link
           href="/settings"
-          className="ml-auto rounded-md p-2 text-jigen-ink-mute hover:bg-jigen-bg-panel-2 hover:text-jigen-gold"
+          className="ml-auto rounded-md p-2 text-jigen-ink-soft hover:bg-jigen-bg-panel-2 hover:text-jigen-gold"
           aria-label="設定"
         >
           <Sparkles aria-hidden className="h-5 w-5" />
