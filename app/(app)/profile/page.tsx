@@ -450,7 +450,7 @@ export default async function ProfilePage() {
       <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-between">
         <Link
           href="/home"
-          className="inline-flex h-11 items-center justify-center rounded-xl !bg-transparent border border-jigen-border-soft px-4 text-sm font-semibold text-jigen-ink hover:border-jigen-gold/60 hover:!bg-jigen-bg-panel-2/40 hover:text-jigen-ink"
+          className="inline-flex h-11 items-center justify-center rounded-xl border border-jigen-gold/40 bg-jigen-bg-panel px-4 text-sm font-semibold text-jigen-ink shadow-panel hover:border-jigen-gold hover:bg-jigen-bg-panel-2 hover:text-jigen-gold"
         >
           ホームに戻る
         </Link>
