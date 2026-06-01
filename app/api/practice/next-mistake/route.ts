@@ -35,8 +35,8 @@ export async function GET() {
       ),
       last_two as (
         select question_id,
-               max(case when rn=1 then is_correct end) as last1,
-               max(case when rn=2 then is_correct end) as last2
+               bool_or(case when rn=1 then is_correct end) as last1,
+               bool_or(case when rn=2 then is_correct end) as last2
         from attempt_seq where rn <= 2
         group by question_id
       ),
