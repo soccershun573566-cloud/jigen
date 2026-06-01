@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
+import { ResetTodayButton } from '@/components/home/v2/ResetTodayButton';
 import type { HomeV2Data } from '@/lib/mock/dashboard-data';
 
 type Props = {
@@ -28,9 +29,12 @@ export function TodayQuestionCard({ today }: Props) {
       <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
         {/* 左: 数字 + 進捗 + CTA */}
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-jigen-gold">
-            今日の問題
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-jigen-gold">
+              今日の問題
+            </p>
+            <ResetTodayButton />
+          </div>
           <div className="mt-2 flex items-baseline gap-3">
             <span className="text-6xl font-extrabold tabular-nums text-jigen-ink drop-shadow-[0_2px_8px_rgba(245,196,65,0.15)] sm:text-7xl">
               {totalQuestions}
