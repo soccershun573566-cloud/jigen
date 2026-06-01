@@ -22,6 +22,7 @@ import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth/session';
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
 import { NicknameEditor } from '@/components/profile/NicknameEditor';
+import { AvatarEditor } from '@/components/profile/AvatarEditor';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -42,7 +43,7 @@ type WeeklyRow = {
   correct: number;
 };
 type StreakRow = { streak: number };
-type ProfileRow = { email: string; display_name: string | null };
+type ProfileRow = { email: string; display_name: string | null; avatar_url: string | null };
 
 // 試験日(モック・将来 users.target_exam_date から)
 const EXAM_DATE = '2025-11-15';
@@ -85,13 +86,13 @@ function daysLeft(target: string): number {
 async function getProfile(userId: string): Promise<ProfileRow> {
   try {
     const result = await db.execute(sql`
-      select email, display_name from users where id = ${userId}
+      select email, display_name, avatar_url from users where id = ${userId}
     `);
     const rows = (result as unknown as { rows?: ProfileRow[] }).rows
       ?? (result as unknown as ProfileRow[]);
-    return rows?.[0] ?? { email: '', display_name: null };
+    return rows?.[0] ?? { email: '', display_name: null, avatar_url: null };
   } catch {
-    return { email: '', display_name: null };
+    return { email: '', display_name: null, avatar_url: null };
   }
 }
 
@@ -253,7 +254,7 @@ export default async function ProfilePage() {
 
       {/* ユーザー + 試験日 */}
       <section className="mb-4 grid gap-4 rounded-2xl border border-jigen-gold/30 bg-panel-gradient p-5 shadow-panel sm:grid-cols-[auto_1fr_auto] sm:items-center">
-        <TiranoSensei size="xl" glow rounded />
+        <AvatarEditor currentAvatarUrl={profile.avatar_url} />
         <div className="space-y-3">
           <NicknameEditor
             initialName={profile.display_name ?? ''}
@@ -449,7 +450,7 @@ export default async function ProfilePage() {
       <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-between">
         <Link
           href="/home"
-          className="inline-flex h-11 items-center justify-center rounded-xl border border-jigen-border-soft bg-transparent px-4 text-sm font-semibold text-jigen-ink hover:border-jigen-gold/60 hover:bg-jigen-bg-panel-2"
+          className="inline-flex h-11 items-center justify-center rounded-xl !bg-transparent border border-jigen-border-soft px-4 text-sm font-semibold text-jigen-ink hover:border-jigen-gold/60 hover:!bg-jigen-bg-panel-2/40 hover:text-jigen-ink"
         >
           ホームに戻る
         </Link>
