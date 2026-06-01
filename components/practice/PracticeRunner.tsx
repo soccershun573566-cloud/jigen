@@ -48,7 +48,14 @@ function pickRandom<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)] as T;
 }
 
-export function PracticeRunner({ question }: { question: RunnerQuestion }) {
+export function PracticeRunner({
+  question,
+  onNext,
+}: {
+  question: RunnerQuestion;
+  /** 「次の問題へ」を URLナビなしで即時切替するための親コールバック(任意) */
+  onNext?: () => void | Promise<void>;
+}) {
   const router = useRouter();
 
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
@@ -115,8 +122,12 @@ export function PracticeRunner({ question }: { question: RunnerQuestion }) {
   }
 
   function handleNext() {
-    // 既に /practice/random にいる場合でも新しい問題に切り替わるように、
-    // クエリにタイムスタンプを付けて再ナビゲートする(Next.js が再fetchする)
+    // 親が onNext を提供している場合は URLナビなしで瞬間切替
+    if (onNext) {
+      void onNext();
+      return;
+    }
+    // フォールバック: URLナビで再フェッチ
     router.push(`/practice/random?t=${Date.now()}`);
   }
 

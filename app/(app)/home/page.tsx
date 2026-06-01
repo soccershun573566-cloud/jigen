@@ -1,17 +1,55 @@
 import Link from 'next/link';
 import { Clock } from 'lucide-react';
+import { sql } from 'drizzle-orm';
 import { getHomeV2 } from '@/lib/mock/dashboard-data';
 import { HomeShell } from '@/components/home/v2/HomeShell';
 import { TodayQuestionCard } from '@/components/home/v2/TodayQuestionCard';
 import { ExamMockCard } from '@/components/home/v2/ExamMockCard';
 import { StatTriple } from '@/components/home/v2/StatTriple';
 import { AiCommentCard } from '@/components/home/v2/AiCommentCard';
+import { getCurrentUser } from '@/lib/auth/session';
+import { db } from '@/lib/db';
+
+// 採点後にホームに戻ったら最新の進捗を反映するため動的レンダリング
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const TODAY_TARGET = 25; // 1日のデフォルト目標問題数(後で users 設定から取得)
+
+async function getTodaySolved(userId: string): Promise<number> {
+  try {
+    // 今日(JST 0時 = UTC 15時)以降の attempts 数
+    const result = await db.execute(sql`
+      select count(*)::int as c
+      from attempts
+      where user_id = ${userId}
+        and attempted_at >= (date_trunc('day', now() at time zone 'Asia/Tokyo') at time zone 'Asia/Tokyo')
+    `);
+    const rows = (result as unknown as { rows?: { c: number }[] }).rows
+      ?? (result as unknown as { c: number }[]);
+    return rows && rows.length > 0 ? (rows[0]?.c ?? 0) : 0;
+  } catch {
+    return 0;
+  }
+}
 
 // S05 ホーム v2(2026-05-30 大刷新)
 // ブランド: ダーク + ゴールド + ティラノ先生 + 権威感 + 成長物語
-// 旧 ユウ§7「励まし禁止/連続日数主役にしない」原則は CEO 指示で破棄。
-export default function HomePage() {
-  const data = getHomeV2();
+export default async function HomePage() {
+  const mock = getHomeV2();
+  const user = await getCurrentUser();
+  const todaySolved = user ? await getTodaySolved(user.id) : 0;
+  const progressPct = TODAY_TARGET > 0 ? Math.min(100, Math.round((todaySolved / TODAY_TARGET) * 100)) : 0;
+
+  const data = {
+    ...mock,
+    today: {
+      ...mock.today,
+      totalQuestions: TODAY_TARGET,
+      solvedQuestions: todaySolved,
+      progressPct,
+    },
+  };
 
   return (
     <HomeShell data={data}>

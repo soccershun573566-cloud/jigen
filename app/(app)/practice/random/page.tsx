@@ -16,7 +16,7 @@ import type { PracticeNextResponse } from '@/types/api';
 type Phase = 'loading' | 'error' | 'ready';
 
 const QUEUE_KEY = 'jigen_question_queue_v1';
-const QUEUE_TARGET = 3; // 常にここまで先読みしておく
+const QUEUE_TARGET = 5; // 常にここまで先読みしておく(テンポ重視)
 
 type CachedQuestion = PracticeNextResponse & { choices?: unknown; isNumeric?: boolean };
 
@@ -150,10 +150,36 @@ export default function PracticeRandomPage() {
     };
   }, [reloadKey, tQuery]);
 
+  // 「次の問題へ」を URLナビなしで瞬間切替する
+  // - キュー先頭から取り出して新 question を state にセット
+  // - PracticeRunner は key 変更で unmount/remount → 内部 state 全リセット
+  // - 同時にバックグラウンドでキュー補充
+  async function handleNextInline() {
+    let queue = readQueue();
+    let next: CachedQuestion | null = null;
+    if (queue.length > 0) {
+      next = queue.shift()!;
+      writeQueue(queue);
+    } else {
+      // キュー空はレアケース(プリフェッチ間に合わず)
+      next = await fetchOne();
+    }
+    if (next) {
+      setQuestion(buildRunnerQuestion(next));
+      // バックグラウンドでキュー補充(現在表示中のIDを除外)
+      if (!refillingRef.current) {
+        refillingRef.current = true;
+        refillQueue(next.id).finally(() => {
+          refillingRef.current = false;
+        });
+      }
+    }
+  }
+
   if (phase === 'ready' && question) {
     // key に question.id を渡して、問題切替時に PracticeRunner を unmount/remount させる
     // (これがないと selectedIdx, phase, result などの state が前問のまま残ってしまう)
-    return <PracticeRunner key={question.id} question={question} />;
+    return <PracticeRunner key={question.id} question={question} onNext={handleNextInline} />;
   }
 
   return (
