@@ -448,10 +448,10 @@ export default async function ProfilePage() {
 
       <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-between">
         <Link
-          href="/mistakes"
+          href="/home"
           className="inline-flex h-11 items-center justify-center rounded-xl border border-jigen-border-soft bg-transparent px-4 text-sm font-semibold text-jigen-ink hover:border-jigen-gold/60 hover:bg-jigen-bg-panel-2"
         >
-          間違えリストを見る
+          ホームに戻る
         </Link>
         <Link
           href="/practice/random"
