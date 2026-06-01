@@ -43,6 +43,13 @@ export async function POST(req: Request) {
     }
     const { questionId, userAnswer, dailyTaskId, responseSeconds, confidence } =
       parsed.data;
+    // 進捗カウント分離用 source:
+    //   - 'daily' (デフォルト): 今日の問題から → ホーム進捗にカウント
+    //   - 'mistakes'           : 間違えリストから → ホーム進捗には加算しない
+    //   - 'other'              : その他(模試/復習モード等の将来用)
+    const rawJson = parsed.data as unknown as { source?: string };
+    const source: 'daily' | 'mistakes' | 'other' =
+      rawJson.source === 'mistakes' || rawJson.source === 'other' ? rawJson.source : 'daily';
 
     // 公開問題のみ採点対象
     const [question] = await db
@@ -63,7 +70,7 @@ export async function POST(req: Request) {
       userAnswer,
     );
 
-    // attempts INSERT(RLS attempts_self_insert で通る)
+    // attempts INSERT(RLS attempts_self_insert で通る) — source も保存
     const [inserted] = await db
       .insert(attempts)
       .values({
@@ -75,6 +82,8 @@ export async function POST(req: Request) {
         isNearMiss,
         responseSeconds,
         confidence: confidence ?? null,
+        // @ts-expect-error: source column added via migration; drizzle schema 未反映
+        source,
       })
       .returning();
 

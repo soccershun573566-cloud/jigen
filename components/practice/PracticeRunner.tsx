@@ -51,10 +51,13 @@ function pickRandom<T>(arr: readonly T[]): T {
 export function PracticeRunner({
   question,
   onNext,
+  source = 'daily',
 }: {
   question: RunnerQuestion;
   /** 「次の問題へ」を URLナビなしで即時切替するための親コールバック(任意) */
   onNext?: () => void | Promise<void>;
+  /** どこから演習しているか。'mistakes' の場合は ホーム進捗にカウントしない */
+  source?: 'daily' | 'mistakes' | 'other';
 }) {
   const router = useRouter();
 
@@ -133,6 +136,7 @@ export function PracticeRunner({
           questionId: question.id,
           userAnswer,
           responseSeconds,
+          source,
         }),
       });
       if (!res.ok) {

@@ -12,6 +12,7 @@ import type { ChoiceQuestion } from '@/types/domain';
 
 interface Props {
   params: { questionId: string };
+  searchParams: { source?: string };
 }
 
 const UUID_RE =
@@ -20,7 +21,10 @@ const UUID_RE =
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default async function QuestionPage({ params }: Props) {
+export default async function QuestionPage({ params, searchParams }: Props) {
+  const sourceParam = searchParams?.source;
+  const source: 'daily' | 'mistakes' | 'other' =
+    sourceParam === 'mistakes' || sourceParam === 'other' ? sourceParam : 'daily';
   const user = await getCurrentUser();
   if (!user) {
     redirect('/login');
@@ -64,6 +68,7 @@ export default async function QuestionPage({ params }: Props) {
 
   return (
     <PracticeRunner
+      source={source}
       question={{
         id: q.id,
         year: q.year,

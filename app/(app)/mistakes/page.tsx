@@ -1,9 +1,13 @@
-// 間違えリスト画面 — 直近で間違えた問題の一覧
-// 各行をタップで該当問題を再演習(問題詳細ページへ)
+// 間違えリスト画面
+// - 上部サマリ: 現在の間違え数 / 今週正解した数 / 復習優先(2回以上間違え)
+// - 教科別の間違え%
+// - 「間違えリストだけ解く」ボタン → /practice/mistakes/random
+// - リスト100件(教科・頻度・追加日)
+// - 各行タップ → /practice/[id]?source=mistakes(ホーム進捗にカウントされない)
 import Link from 'next/link';
 import { sql } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
-import { ChevronLeft, X } from 'lucide-react';
+import { ChevronLeft, X, Shuffle, TrendingDown, TrendingUp } from 'lucide-react';
 import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth/session';
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
@@ -18,6 +22,19 @@ type Row = {
   body_md: string;
   attempted_at: string;
   wrong_count: number;
+};
+
+type Summary = {
+  current_wrong: number; // 復習が必要な問題(直近で間違えた・まだ正解していない)
+  this_week_resolved: number; // 今週、間違えた問題を後で正解した数
+  high_priority: number; // 2回以上間違えた問題
+};
+
+type SectionStats = {
+  section: string;
+  total: number;
+  wrong: number;
+  wrong_pct: number;
 };
 
 async function getWrongList(userId: string): Promise<Row[]> {
@@ -37,10 +54,87 @@ async function getWrongList(userId: string): Promise<Row[]> {
       order by lw.attempted_at desc
       limit 100
     `);
-    const rows =
-      (result as unknown as { rows?: Row[] }).rows ??
-      (result as unknown as Row[]);
+    const rows = (result as unknown as { rows?: Row[] }).rows
+      ?? (result as unknown as Row[]);
     return rows ?? [];
+  } catch {
+    return [];
+  }
+}
+
+async function getSummary(userId: string): Promise<Summary> {
+  try {
+    // current_wrong: ユーザーが間違えた問題のうち、まだ正解していないもの
+    const r1 = await db.execute(sql`
+      select count(*)::int as c from (
+        select question_id from attempts
+        where user_id = ${userId} and is_correct = false
+        group by question_id
+        having not exists (
+          select 1 from attempts a2
+          where a2.user_id = ${userId} and a2.question_id = attempts.question_id and a2.is_correct = true
+        )
+      ) t
+    `);
+    const r1rows = (r1 as unknown as { rows?: { c: number }[] }).rows
+      ?? (r1 as unknown as { c: number }[]);
+    const current_wrong = r1rows?.[0]?.c ?? 0;
+
+    // this_week_resolved: 直近7日で、過去に間違えた問題を正解した数
+    const r2 = await db.execute(sql`
+      select count(distinct a.question_id)::int as c
+      from attempts a
+      where a.user_id = ${userId}
+        and a.is_correct = true
+        and a.attempted_at >= (now() - interval '7 days')
+        and exists (
+          select 1 from attempts a0
+          where a0.user_id = ${userId}
+            and a0.question_id = a.question_id
+            and a0.is_correct = false
+            and a0.attempted_at < a.attempted_at
+        )
+    `);
+    const r2rows = (r2 as unknown as { rows?: { c: number }[] }).rows
+      ?? (r2 as unknown as { c: number }[]);
+    const this_week_resolved = r2rows?.[0]?.c ?? 0;
+
+    // high_priority: 2回以上間違えた問題
+    const r3 = await db.execute(sql`
+      select count(*)::int as c from (
+        select question_id from attempts
+        where user_id = ${userId} and is_correct = false
+        group by question_id
+        having count(*) >= 2
+      ) t
+    `);
+    const r3rows = (r3 as unknown as { rows?: { c: number }[] }).rows
+      ?? (r3 as unknown as { c: number }[]);
+    const high_priority = r3rows?.[0]?.c ?? 0;
+
+    return { current_wrong, this_week_resolved, high_priority };
+  } catch {
+    return { current_wrong: 0, this_week_resolved: 0, high_priority: 0 };
+  }
+}
+
+async function getSectionStats(userId: string): Promise<SectionStats[]> {
+  try {
+    const result = await db.execute(sql`
+      select q.section,
+             count(*)::int as total,
+             count(*) filter (where a.is_correct = false)::int as wrong
+      from attempts a join questions q on q.id = a.question_id
+      where a.user_id = ${userId}
+      group by q.section
+      order by wrong desc
+    `);
+    const rows = (result as unknown as { rows?: { section: string; total: number; wrong: number }[] }).rows
+      ?? (result as unknown as { section: string; total: number; wrong: number }[]);
+    return (rows ?? []).map((r) => ({
+      ...r,
+      wrong_pct: r.total > 0 ? Math.round((r.wrong / r.total) * 100) : 0,
+    }));
   } catch {
     return [];
   }
@@ -49,7 +143,11 @@ async function getWrongList(userId: string): Promise<Row[]> {
 export default async function MistakesPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/auth/login');
-  const items = await getWrongList(user.id);
+  const [items, summary, sections] = await Promise.all([
+    getWrongList(user.id),
+    getSummary(user.id),
+    getSectionStats(user.id),
+  ]);
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-5 text-jigen-ink">
@@ -62,7 +160,81 @@ export default async function MistakesPage() {
           <ChevronLeft aria-hidden className="h-5 w-5" />
         </Link>
         <h1 className="text-lg font-bold">間違えリスト</h1>
-        <span className="ml-auto rounded-md border border-jigen-border-soft px-2 py-0.5 text-xs text-jigen-ink-mute">
+      </div>
+
+      {/* サマリ */}
+      <section className="mb-4 rounded-xl border border-jigen-gold/30 bg-panel-gradient p-4 shadow-panel">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-jigen-gold">
+          あなたの間違え状況
+        </h2>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">現在の間違え</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-jigen-gold">{summary.current_wrong}</p>
+            <p className="text-[10px] text-jigen-ink-mute">復習が必要</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">今週解除</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-400">{summary.this_week_resolved}</p>
+            <p className="text-[10px] text-jigen-ink-mute">復習して正解</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">復習優先</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-jigen-warning">{summary.high_priority}</p>
+            <p className="text-[10px] text-jigen-ink-mute">2回以上間違え</p>
+          </div>
+        </div>
+      </section>
+
+      {/* 教科別 */}
+      {sections.length > 0 ? (
+        <section className="mb-4 rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-4 shadow-panel">
+          <h2 className="mb-3 text-sm font-bold">教科ごとの間違え率</h2>
+          <ul className="flex flex-col gap-2.5">
+            {sections.map((s) => (
+              <li key={s.section}>
+                <div className="flex items-baseline justify-between text-xs text-jigen-ink-soft">
+                  <span className="font-semibold text-jigen-ink">{s.section}</span>
+                  <span>
+                    <span className="tabular-nums text-jigen-warning">{s.wrong_pct}%</span>
+                    <span className="ml-2 tabular-nums text-jigen-ink-mute">
+                      ({s.wrong}/{s.total} 問)
+                    </span>
+                  </span>
+                </div>
+                <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-jigen-bg-panel-2">
+                  <div
+                    className="h-full rounded-full bg-jigen-warning"
+                    style={{ width: `${s.wrong_pct}%` }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {/* まとめて解くボタン */}
+      {items.length > 0 ? (
+        <Link
+          href="/practice/mistakes/random"
+          className="mb-4 flex items-center justify-between rounded-xl border border-jigen-gold/30 bg-gold-gradient/20 p-4 shadow-gold-glow transition-transform hover:scale-[1.01]"
+        >
+          <div>
+            <p className="text-sm font-bold text-jigen-ink">間違えリストだけ解く</p>
+            <p className="text-xs text-jigen-ink-soft">
+              リストの問題からまとめて解きます(進捗には加算しません)
+            </p>
+          </div>
+          <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-gold-gradient text-jigen-bg-dark shadow-gold-glow">
+            <Shuffle aria-hidden className="h-5 w-5" />
+          </span>
+        </Link>
+      ) : null}
+
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-bold">復習対象</h2>
+        <span className="rounded-md border border-jigen-border-soft px-2 py-0.5 text-xs text-jigen-ink-mute">
           {items.length} 件
         </span>
       </div>
@@ -87,7 +259,7 @@ export default async function MistakesPage() {
           {items.map((it) => (
             <li key={it.id}>
               <Link
-                href={`/practice/${it.id}`}
+                href={`/practice/${it.id}?source=mistakes`}
                 className="flex items-start gap-3 rounded-lg border border-jigen-border-soft bg-jigen-bg-panel p-3 transition-colors hover:border-jigen-gold/40 hover:bg-jigen-bg-panel-2"
               >
                 <span
