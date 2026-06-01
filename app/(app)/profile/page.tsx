@@ -1,14 +1,27 @@
-// プロフィール画面 — 生徒の学習分析(統計)
-// - 累計解答数 / 正答率 / 連続日数(累計学習日)
-// - 分野別正答率(建築学一般 / 施工管理法 / 法規 / その他)
-// - 直近7日の進捗
+// プロフィール画面(添付画像参考のリッチ版)
+// - ユーザー(アバター + ニックネーム編集 + 現在の判定)+ 試験日カード
+// - サマリ4枚(総問題数 / 総正答率 / 継続日数 / 間違えリスト)
+// - 教科別の達成率と判定
+// - 成長の推移(直近5週)
+// - ティラノ先生コメント
+// - 現在の学習フェーズ(タイムライン)
+// - 次回の小テスト(モック)
 import Link from 'next/link';
 import { sql } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
-import { ChevronLeft, Target, Award, Calendar } from 'lucide-react';
+import {
+  Award,
+  Target,
+  Flame,
+  ChevronRight,
+  Calendar,
+  Mountain,
+  Sparkles,
+} from 'lucide-react';
 import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth/session';
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
+import { NicknameEditor } from '@/components/profile/NicknameEditor';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -24,20 +37,71 @@ type SectionStats = {
   correct: number;
 };
 type WeeklyRow = {
-  day: string;
+  week_idx: number; // 0=今週, 1=先週, 2=2週間前, ...
   total: number;
   correct: number;
 };
+type StreakRow = { streak: number };
+type ProfileRow = { email: string; display_name: string | null };
+
+// 試験日(モック・将来 users.target_exam_date から)
+const EXAM_DATE = '2025-11-15';
+
+const PHASES = [
+  { key: 'foundation', label: '基礎構築期', min: 0 },
+  { key: 'weak_improve', label: '苦手改善期', min: 100 },
+  { key: 'stabilize', label: '得点安定期', min: 400 },
+  { key: 'mock_focus', label: '模試強化期', min: 800 },
+  { key: 'final_tune', label: '本試験調整期', min: 1200 },
+] as const;
+
+function pct(num: number, den: number): number {
+  return den > 0 ? Math.round((num / den) * 100) : 0;
+}
+
+function gradeFromPct(p: number): { grade: string; color: string } {
+  if (p >= 90) return { grade: 'S', color: 'text-amber-300' };
+  if (p >= 80) return { grade: 'A', color: 'text-emerald-400' };
+  if (p >= 70) return { grade: 'B', color: 'text-jigen-gold' };
+  if (p >= 60) return { grade: 'C', color: 'text-amber-500' };
+  if (p >= 50) return { grade: 'D', color: 'text-orange-400' };
+  return { grade: 'E', color: 'text-jigen-warning' };
+}
+
+function getCurrentPhase(totalAttempts: number) {
+  let current = PHASES[0];
+  for (const p of PHASES) {
+    if (totalAttempts >= p.min) current = p;
+  }
+  return current;
+}
+
+function daysLeft(target: string): number {
+  const t = new Date(target + 'T00:00:00+09:00').getTime();
+  const now = Date.now();
+  return Math.max(0, Math.ceil((t - now) / (24 * 60 * 60 * 1000)));
+}
+
+async function getProfile(userId: string): Promise<ProfileRow> {
+  try {
+    const result = await db.execute(sql`
+      select email, display_name from users where id = ${userId}
+    `);
+    const rows = (result as unknown as { rows?: ProfileRow[] }).rows
+      ?? (result as unknown as ProfileRow[]);
+    return rows?.[0] ?? { email: '', display_name: null };
+  } catch {
+    return { email: '', display_name: null };
+  }
+}
 
 async function getOverall(userId: string): Promise<OverallStats> {
   try {
     const result = await db.execute(sql`
-      select
-        count(*)::int as total_attempts,
-        count(*) filter (where is_correct = true)::int as total_correct,
-        count(distinct date_trunc('day', attempted_at at time zone 'Asia/Tokyo'))::int as study_days
-      from attempts
-      where user_id = ${userId}
+      select count(*)::int as total_attempts,
+             count(*) filter (where is_correct = true)::int as total_correct,
+             count(distinct date_trunc('day', attempted_at at time zone 'Asia/Tokyo'))::int as study_days
+      from attempts where user_id = ${userId}
     `);
     const rows = (result as unknown as { rows?: OverallStats[] }).rows
       ?? (result as unknown as OverallStats[]);
@@ -56,7 +120,11 @@ async function getBySection(userId: string): Promise<SectionStats[]> {
       from attempts a join questions q on q.id = a.question_id
       where a.user_id = ${userId}
       group by q.section
-      order by total desc
+      order by case q.section
+        when '建築学一般' then 1
+        when '施工管理法' then 2
+        when '法規' then 3
+        else 4 end
     `);
     const rows = (result as unknown as { rows?: SectionStats[] }).rows
       ?? (result as unknown as SectionStats[]);
@@ -68,15 +136,22 @@ async function getBySection(userId: string): Promise<SectionStats[]> {
 
 async function getWeekly(userId: string): Promise<WeeklyRow[]> {
   try {
+    // 直近5週、JST月曜起点
     const result = await db.execute(sql`
-      select to_char(date_trunc('day', attempted_at at time zone 'Asia/Tokyo'), 'YYYY-MM-DD') as day,
-             count(*)::int as total,
-             count(*) filter (where is_correct = true)::int as correct
-      from attempts
-      where user_id = ${userId}
-        and attempted_at >= (now() - interval '7 days')
-      group by 1
-      order by 1 desc
+      with weeks as (
+        select w as week_idx,
+               (date_trunc('week', (now() at time zone 'Asia/Tokyo')) - (w || ' weeks')::interval) as wstart
+        from generate_series(0, 4) as w
+      )
+      select w.week_idx::int as week_idx,
+             count(a.*)::int as total,
+             count(*) filter (where a.is_correct = true)::int as correct
+      from weeks w
+      left join attempts a on a.user_id = ${userId}
+        and (a.attempted_at at time zone 'Asia/Tokyo') >= w.wstart
+        and (a.attempted_at at time zone 'Asia/Tokyo') < (w.wstart + interval '1 week')
+      group by w.week_idx
+      order by w.week_idx desc
     `);
     const rows = (result as unknown as { rows?: WeeklyRow[] }).rows
       ?? (result as unknown as WeeklyRow[]);
@@ -86,88 +161,184 @@ async function getWeekly(userId: string): Promise<WeeklyRow[]> {
   }
 }
 
-function pct(num: number, den: number): number {
-  return den > 0 ? Math.round((num / den) * 100) : 0;
+async function getCurrentStreak(userId: string): Promise<number> {
+  try {
+    // 連続日数: JST単位で、今日(or直近)から遡って連続して attempts のある日数
+    const result = await db.execute(sql`
+      with days as (
+        select distinct date_trunc('day', attempted_at at time zone 'Asia/Tokyo')::date as d
+        from attempts where user_id = ${userId}
+      ),
+      diffs as (
+        select d, (d - (row_number() over (order by d desc) - 1)::int)::date as anchor
+        from days
+      )
+      select count(*)::int as streak
+      from diffs
+      where anchor = (select max(anchor) from diffs)
+        and (current_date at time zone 'Asia/Tokyo')::date - d <= 1
+    `);
+    const rows = (result as unknown as { rows?: StreakRow[] }).rows
+      ?? (result as unknown as StreakRow[]);
+    return rows?.[0]?.streak ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function getMistakesCount(userId: string): Promise<number> {
+  try {
+    const result = await db.execute(sql`
+      with attempt_seq as (
+        select question_id, is_correct,
+               row_number() over (partition by question_id order by attempted_at desc) as rn
+        from attempts where user_id = ${userId}
+      ),
+      last_two as (
+        select question_id,
+               bool_or(case when rn=1 then is_correct end) as last1,
+               bool_or(case when rn=2 then is_correct end) as last2
+        from attempt_seq where rn <= 2
+        group by question_id
+      ),
+      ever_wrong as (
+        select distinct question_id from attempts
+        where user_id = ${userId} and is_correct = false
+      )
+      select count(*)::int as c
+      from ever_wrong ew
+      left join last_two lt on lt.question_id = ew.question_id
+      where (lt.last1 is not true or lt.last2 is not true)
+    `);
+    const rows = (result as unknown as { rows?: { c: number }[] }).rows
+      ?? (result as unknown as { c: number }[]);
+    return rows?.[0]?.c ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
 export default async function ProfilePage() {
   const user = await getCurrentUser();
   if (!user) redirect('/auth/login');
-  const [overall, sections, weekly] = await Promise.all([
+
+  const [profile, overall, sections, weekly, streak, mistakesCount] = await Promise.all([
+    getProfile(user.id),
     getOverall(user.id),
     getBySection(user.id),
     getWeekly(user.id),
+    getCurrentStreak(user.id),
+    getMistakesCount(user.id),
   ]);
+
   const overallPct = pct(overall.total_correct, overall.total_attempts);
-  const weeklyTotal = weekly.reduce((a, x) => a + x.total, 0);
-  const maxDailyTotal = Math.max(1, ...weekly.map((w) => w.total));
+  const overallGrade = gradeFromPct(overallPct);
+  const phase = getCurrentPhase(overall.total_attempts);
+  const dleft = daysLeft(EXAM_DATE);
+  const weeklyAsc = [...weekly].reverse(); // 表示は古い→新しい
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-5 text-jigen-ink">
+    <main className="mx-auto w-full max-w-3xl px-4 py-5 text-jigen-ink">
+      {/* ヘッダ */}
       <div className="mb-4 flex items-center gap-2">
+        <h1 className="text-lg font-bold">プロフィール</h1>
         <Link
-          href="/home"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-jigen-ink-soft hover:bg-jigen-bg-panel-2 hover:text-jigen-gold"
-          aria-label="ホームへ戻る"
+          href="/settings"
+          className="ml-auto rounded-md p-2 text-jigen-ink-mute hover:bg-jigen-bg-panel-2 hover:text-jigen-gold"
+          aria-label="設定"
         >
-          <ChevronLeft aria-hidden className="h-5 w-5" />
+          <Sparkles aria-hidden className="h-5 w-5" />
         </Link>
-        <h1 className="text-lg font-bold">プロフィール / 学習分析</h1>
       </div>
 
-      {/* ユーザー */}
-      <section className="mb-4 flex items-center gap-4 rounded-xl border border-jigen-gold/30 bg-panel-gradient p-4 shadow-panel">
-        <TiranoSensei size="md" glow rounded />
-        <div className="min-w-0">
-          <p className="truncate text-base font-bold text-jigen-ink">{user.email}</p>
-          <p className="mt-0.5 text-xs text-jigen-ink-soft">学習者プロフィール</p>
+      {/* ユーザー + 試験日 */}
+      <section className="mb-4 grid gap-4 rounded-2xl border border-jigen-gold/30 bg-panel-gradient p-5 shadow-panel sm:grid-cols-[auto_1fr_auto] sm:items-center">
+        <TiranoSensei size="xl" glow rounded />
+        <div className="space-y-3">
+          <NicknameEditor
+            initialName={profile.display_name ?? ''}
+            fallback={profile.email?.split('@')[0] ?? 'ユーザー'}
+          />
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">現在の判定</p>
+            <div className="mt-1 flex items-center gap-2">
+              <Award aria-hidden className="h-6 w-6 text-jigen-gold" />
+              <span className={`text-3xl font-extrabold ${overallGrade.color}`}>
+                {overallGrade.grade}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-xl border border-jigen-border-soft bg-jigen-bg-dark p-3 sm:min-w-[180px]">
+          <div className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-jigen-ink-mute">
+            <Calendar aria-hidden className="h-3.5 w-3.5" />
+            試験日
+          </div>
+          <p className="mt-1 text-sm font-semibold text-jigen-ink">{EXAM_DATE}</p>
+          <div className="mt-2 text-[10px] uppercase tracking-widest text-jigen-ink-mute">試験まで</div>
+          <p className="text-2xl font-extrabold tabular-nums text-jigen-gold drop-shadow-[0_0_8px_rgba(245,196,65,0.4)]">
+            {dleft}
+            <span className="ml-1 text-xs font-medium text-jigen-ink-soft">日</span>
+          </p>
         </div>
       </section>
 
-      {/* サマリ3カラム */}
-      <section className="mb-5 grid grid-cols-3 gap-2">
+      {/* サマリ4枚 */}
+      <section className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div className="rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-3 text-center">
           <Target aria-hidden className="mx-auto h-4 w-4 text-jigen-gold" />
-          <p className="mt-1 text-[10px] uppercase tracking-widest text-jigen-ink-mute">累計解答</p>
-          <p className="mt-0.5 text-xl font-bold tabular-nums">{overall.total_attempts}</p>
+          <p className="mt-1 text-[10px] uppercase tracking-widest text-jigen-ink-mute">総問題数</p>
+          <p className="mt-0.5 text-2xl font-bold tabular-nums">{overall.total_attempts.toLocaleString()}</p>
+          <p className="text-[10px] text-jigen-ink-mute">解いた問題</p>
         </div>
         <div className="rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-3 text-center">
           <Award aria-hidden className="mx-auto h-4 w-4 text-jigen-gold" />
-          <p className="mt-1 text-[10px] uppercase tracking-widest text-jigen-ink-mute">正答率</p>
-          <p className="mt-0.5 text-xl font-bold tabular-nums text-jigen-gold">{overallPct}%</p>
+          <p className="mt-1 text-[10px] uppercase tracking-widest text-jigen-ink-mute">総正答率</p>
+          <p className="mt-0.5 text-2xl font-bold tabular-nums text-jigen-gold">{overallPct}%</p>
+          <p className="text-[10px] text-jigen-ink-mute">{overall.total_correct}問正解</p>
         </div>
         <div className="rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-3 text-center">
-          <Calendar aria-hidden className="mx-auto h-4 w-4 text-jigen-gold" />
-          <p className="mt-1 text-[10px] uppercase tracking-widest text-jigen-ink-mute">学習日</p>
-          <p className="mt-0.5 text-xl font-bold tabular-nums">{overall.study_days}</p>
+          <Flame aria-hidden className="mx-auto h-4 w-4 text-jigen-gold" />
+          <p className="mt-1 text-[10px] uppercase tracking-widest text-jigen-ink-mute">継続日数</p>
+          <p className="mt-0.5 text-2xl font-bold tabular-nums text-jigen-gold">{streak}日</p>
+          <p className="text-[10px] text-jigen-ink-mute">合計{overall.study_days}日学習</p>
         </div>
+        <Link
+          href="/mistakes"
+          className="rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-3 text-center transition-colors hover:border-jigen-gold/50 hover:bg-jigen-bg-panel-2"
+        >
+          <ChevronRight aria-hidden className="ml-auto h-4 w-4 text-jigen-ink-mute" />
+          <p className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">間違えリスト</p>
+          <p className="mt-0.5 text-2xl font-bold tabular-nums text-jigen-warning">{mistakesCount}</p>
+          <p className="text-[10px] text-jigen-ink-mute">復習推奨</p>
+        </Link>
       </section>
 
-      {/* 分野別 */}
-      <section className="mb-5 rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-4 shadow-panel">
-        <h2 className="mb-3 text-sm font-bold">分野別の正答率</h2>
+      {/* 教科別の達成率と判定 */}
+      <section className="mb-4 rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-4 shadow-panel">
+        <h2 className="mb-3 text-sm font-bold">教科別の達成率と判定</h2>
         {sections.length === 0 ? (
-          <p className="text-xs text-jigen-ink-mute">まだデータがありません。</p>
+          <p className="text-xs text-jigen-ink-mute">まだデータがありません。問題を解いてみましょう。</p>
         ) : (
           <ul className="flex flex-col gap-3">
             {sections.map((s) => {
               const p = pct(s.correct, s.total);
+              const g = gradeFromPct(p);
               return (
-                <li key={s.section}>
-                  <div className="flex items-baseline justify-between text-xs text-jigen-ink-soft">
-                    <span className="font-semibold text-jigen-ink">{s.section}</span>
-                    <span>
-                      <span className="tabular-nums text-jigen-gold-bright">{p}%</span>
-                      <span className="ml-2 tabular-nums text-jigen-ink-mute">
-                        ({s.correct}/{s.total})
-                      </span>
-                    </span>
+                <li key={s.section} className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1">
+                  <div className="text-sm font-semibold text-jigen-ink">{s.section}</div>
+                  <div className="flex items-baseline gap-3 text-xs">
+                    <span className="tabular-nums text-jigen-gold-bright">{p}%</span>
+                    <span className={`text-xl font-extrabold ${g.color}`}>{g.grade}</span>
                   </div>
-                  <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-jigen-bg-panel-2">
+                  <div className="col-span-2 h-2.5 overflow-hidden rounded-full bg-jigen-bg-panel-2">
                     <div
-                      className="h-full rounded-full bg-gold-gradient"
+                      className="h-full rounded-full bg-gold-gradient transition-[width] duration-700"
                       style={{ width: `${p}%` }}
                     />
+                  </div>
+                  <div className="col-span-2 text-[10px] tabular-nums text-jigen-ink-mute">
+                    {s.correct}/{s.total} 問正解
                   </div>
                 </li>
               );
@@ -176,33 +347,30 @@ export default async function ProfilePage() {
         )}
       </section>
 
-      {/* 直近7日 */}
-      <section className="mb-5 rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-4 shadow-panel">
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-sm font-bold">直近7日の進捗</h2>
-          <span className="text-xs text-jigen-ink-mute">
-            合計 <span className="tabular-nums text-jigen-ink">{weeklyTotal}</span> 問
-          </span>
-        </div>
-        {weekly.length === 0 ? (
+      {/* 直近5週の推移 */}
+      <section className="mb-4 rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-4 shadow-panel">
+        <h2 className="mb-3 text-sm font-bold">直近5週の推移</h2>
+        {weeklyAsc.every((w) => w.total === 0) ? (
           <p className="text-xs text-jigen-ink-mute">まだデータがありません。</p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {weekly.map((w) => {
-              const widthPct = (w.total / maxDailyTotal) * 100;
+            {weeklyAsc.map((w) => {
+              const labels = ['4週間前', '3週間前', '2週間前', '先週', '今週'];
+              const idx = 4 - w.week_idx;
+              const label = labels[idx] ?? `${w.week_idx}週前`;
               const correctPct = pct(w.correct, w.total);
+              const maxTotal = Math.max(1, ...weeklyAsc.map((x) => x.total));
+              const barWidth = (w.total / maxTotal) * 100;
               return (
-                <li key={w.day} className="flex items-center gap-3">
-                  <span className="w-20 shrink-0 text-[11px] tabular-nums text-jigen-ink-mute">
-                    {w.day}
-                  </span>
-                  <div className="relative h-5 flex-1 overflow-hidden rounded bg-jigen-bg-panel-2">
+                <li key={w.week_idx} className="flex items-center gap-3">
+                  <span className="w-20 shrink-0 text-[11px] text-jigen-ink-mute">{label}</span>
+                  <div className="relative h-6 flex-1 overflow-hidden rounded bg-jigen-bg-panel-2">
                     <div
                       className="absolute inset-y-0 left-0 bg-gold-gradient"
-                      style={{ width: `${widthPct}%` }}
+                      style={{ width: `${barWidth}%` }}
                     />
-                    <span className="absolute inset-0 flex items-center justify-end pr-2 text-[10px] font-semibold tabular-nums text-jigen-bg-dark mix-blend-difference">
-                      {w.total}問・{correctPct}%
+                    <span className="absolute inset-0 flex items-center justify-end pr-2 text-[11px] font-semibold tabular-nums text-jigen-ink mix-blend-difference">
+                      {w.total}問 / {correctPct}%
                     </span>
                   </div>
                 </li>
@@ -210,6 +378,72 @@ export default async function ProfilePage() {
             })}
           </ul>
         )}
+      </section>
+
+      {/* 学習フェーズ */}
+      <section className="mb-4 rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-4 shadow-panel">
+        <h2 className="mb-3 text-sm font-bold">現在の学習フェーズ</h2>
+        <ol className="mb-3 flex items-center justify-between gap-1">
+          {PHASES.map((p) => {
+            const reached = overall.total_attempts >= p.min;
+            const current = p.key === phase.key;
+            return (
+              <li key={p.key} className="flex flex-1 flex-col items-center">
+                <div
+                  className={[
+                    'flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-bold',
+                    current
+                      ? 'border-jigen-gold bg-jigen-gold text-jigen-bg-dark shadow-gold-glow'
+                      : reached
+                        ? 'border-jigen-gold/60 text-jigen-gold'
+                        : 'border-jigen-border-soft text-jigen-ink-mute',
+                  ].join(' ')}
+                >
+                  {reached ? '✓' : ' '}
+                </div>
+                <p
+                  className={[
+                    'mt-1 text-[10px] leading-tight',
+                    current ? 'font-bold text-jigen-gold' : 'text-jigen-ink-mute',
+                  ].join(' ')}
+                >
+                  {p.label}
+                </p>
+              </li>
+            );
+          })}
+        </ol>
+        <div className="rounded-md border border-jigen-gold/30 bg-jigen-bg-panel-2 p-3">
+          <div className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-jigen-gold">
+            <Mountain aria-hidden className="h-3.5 w-3.5" />
+            現在地: {phase.label}
+          </div>
+          <p className="mt-1 text-xs text-jigen-ink-soft">
+            {phase.key === 'foundation' && '基礎を一問ずつ。継続が一番の近道です。'}
+            {phase.key === 'weak_improve' && '苦手分野を克服し、得点力を底上げしている時期です。'}
+            {phase.key === 'stabilize' && '安定した正答率を維持するフェーズ。穴を一つずつ埋めましょう。'}
+            {phase.key === 'mock_focus' && '本試験を意識した模試強化期。時間配分にも注意。'}
+            {phase.key === 'final_tune' && '本試験前の最終調整期。総仕上げにかかりましょう。'}
+          </p>
+        </div>
+      </section>
+
+      {/* ティラノ先生コメント */}
+      <section className="mb-4 rounded-xl border border-jigen-gold/30 bg-panel-gradient p-4 shadow-panel">
+        <div className="flex items-start gap-3">
+          <TiranoSensei size="md" glow />
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-jigen-gold">
+              ティラノ先生からのコメント
+            </p>
+            <p className="mt-1 text-sm leading-relaxed text-jigen-ink-soft">
+              {sections.length === 0
+                ? `${profile.display_name ?? 'あなた'}さん、ようこそ。
+まずは1問解いてみましょう。続けるほどに、ここに分析が積み上がっていきます。`
+                : `現在「${phase.label}」です。総正答率 ${overallPct}% / 継続 ${streak}日。このペースを維持できれば、上の判定への安定が見えてきますよ。引き続き、一緒にがんばりましょう。`}
+            </p>
+          </div>
+        </div>
       </section>
 
       <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-between">
