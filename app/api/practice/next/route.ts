@@ -1,11 +1,12 @@
 /**
  * GET /api/practice/next
- * ランダム公開問題1件を取得(回答前なので answer / explanation は返さない)。
+ * ランダム公開問題1件を取得。
  *
- * 高速化:
- *   - 1クエリ完結(attempts + questions を sub-query で除外)
- *   - count(*) は削除(残数表示はオプショナルなので不要)
- *   - ORDER BY random() は 1425件規模なら問題なし
+ * 出題ロジック:
+ *   - 50% の確率で「間違えリスト復習対象」(間違えた問題 & 直近2回連続正解で解除されていない
+ *                                          & 最終attempt が 2日以上前) を優先出題
+ *   - 残りは通常ランダム(直近24h挑戦済を除外)
+ *   - 復習対象がない/抽選外なら通常ランダム
  */
 import { NextResponse } from 'next/server';
 import { sql } from 'drizzle-orm';
@@ -15,23 +16,39 @@ import { db } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+type QuestionRow = {
+  id: string;
+  year: number;
+  q_number: number;
+  section: string;
+  sub_topic: string;
+  difficulty: number;
+  body_md: string;
+  choices: unknown;
+  is_numeric: boolean;
+};
+
 export async function GET() {
   try {
     const user = await requireUser();
 
-    // 1クエリで「直近24h未挑戦」を満たす公開問題からランダム1件
-    // 全部解き終わってる場合は 24h 制約を外す second-pass を試す
-    let row = await pickRandom(user.id, true);
-    if (!row) row = await pickRandom(user.id, false);
+    let row: QuestionRow | null = null;
+
+    // 50% の確率で復習問題を優先
+    if (Math.random() < 0.5) {
+      row = await pickReviewDue(user.id);
+    }
+
+    if (!row) {
+      row = await pickRandom(user.id, true);
+    }
+    if (!row) {
+      row = await pickRandom(user.id, false);
+    }
 
     if (!row) {
       return NextResponse.json(
-        {
-          error: {
-            code: 'no_published_questions',
-            message: '公開問題が見つかりません',
-          },
-        },
+        { error: { code: 'no_published_questions', message: '公開問題が見つかりません' } },
         { status: 404 },
       );
     }
@@ -58,17 +75,51 @@ export async function GET() {
   }
 }
 
-type QuestionRow = {
-  id: string;
-  year: number;
-  q_number: number;
-  section: string;
-  sub_topic: string;
-  difficulty: number;
-  body_md: string;
-  choices: unknown;
-  is_numeric: boolean;
-};
+function extractRow(result: unknown): QuestionRow | null {
+  const rows =
+    (result as { rows?: QuestionRow[] }).rows ??
+    (result as QuestionRow[]);
+  return rows && rows.length > 0 ? (rows[0] ?? null) : null;
+}
+
+/**
+ * 復習対象(2日間隔):
+ *   - 間違えたことがある
+ *   - 直近2回連続正解で解除 ではない
+ *   - 最終 attempt から 2日以上経過
+ */
+async function pickReviewDue(userId: string): Promise<QuestionRow | null> {
+  const result = await db.execute(sql`
+    with attempt_seq as (
+      select question_id, is_correct, attempted_at,
+             row_number() over (partition by question_id order by attempted_at desc) as rn
+      from attempts where user_id = ${userId}
+    ),
+    last_two as (
+      select question_id,
+             max(case when rn=1 then is_correct end) as last1,
+             max(case when rn=2 then is_correct end) as last2,
+             max(case when rn=1 then attempted_at end) as last_attempt
+      from attempt_seq where rn <= 2
+      group by question_id
+    ),
+    ever_wrong as (
+      select distinct question_id from attempts
+      where user_id = ${userId} and is_correct = false
+    )
+    select q.id, q.year, q.q_number, q.section, q.sub_topic, q.difficulty,
+           q.body_md, q.choices, q.is_numeric
+    from ever_wrong ew
+    join last_two lt on lt.question_id = ew.question_id
+    join questions q on q.id = ew.question_id
+    where q.published = true
+      and not (lt.last1 is true and lt.last2 is true)
+      and lt.last_attempt < now() - interval '2 days'
+    order by random()
+    limit 1
+  `);
+  return extractRow(result);
+}
 
 async function pickRandom(userId: string, excludeRecent: boolean): Promise<QuestionRow | null> {
   const result = excludeRecent
@@ -91,8 +142,5 @@ async function pickRandom(userId: string, excludeRecent: boolean): Promise<Quest
         order by random()
         limit 1
       `);
-
-  const rows = (result as unknown as { rows?: QuestionRow[] }).rows
-    ?? (result as unknown as QuestionRow[]);
-  return rows && rows.length > 0 ? (rows[0] ?? null) : null;
+  return extractRow(result);
 }

@@ -113,6 +113,8 @@ export const attempts = pgTable('attempts', {
   responseSeconds: integer('response_seconds').notNull(),
   confidence: smallint('confidence'),
   attemptedAt: timestamp('attempted_at', { withTimezone: true }).notNull().defaultNow(),
+  // 'daily' | 'mistakes' | 'other' — ホーム進捗カウント分離用
+  source: text('source').notNull().default('daily'),
 });
 
 // ============ mastery_profiles ============

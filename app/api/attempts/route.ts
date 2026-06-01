@@ -82,7 +82,6 @@ export async function POST(req: Request) {
         isNearMiss,
         responseSeconds,
         confidence: confidence ?? null,
-        // @ts-expect-error: source column added via migration; drizzle schema 未反映
         source,
       })
       .returning();

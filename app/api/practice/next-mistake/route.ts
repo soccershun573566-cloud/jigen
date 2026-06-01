@@ -26,20 +26,31 @@ export async function GET() {
   try {
     const user = await requireUser();
 
-    // 「自分が間違えた + まだ正解していない」問題からランダム1件
+    // 間違えリスト復習対象(2回連続正解で解除されていない問題)からランダム1件
     const result = await db.execute(sql`
-      select id, year, q_number, section, sub_topic, difficulty, body_md, choices, is_numeric
-      from questions
-      where published = true
-        and id in (
-          select question_id from attempts
-          where user_id = ${user.id} and is_correct = false
-          group by question_id
-          having not exists (
-            select 1 from attempts a2
-            where a2.user_id = ${user.id} and a2.question_id = attempts.question_id and a2.is_correct = true
-          )
-        )
+      with attempt_seq as (
+        select question_id, is_correct,
+               row_number() over (partition by question_id order by attempted_at desc) as rn
+        from attempts where user_id = ${user.id}
+      ),
+      last_two as (
+        select question_id,
+               max(case when rn=1 then is_correct end) as last1,
+               max(case when rn=2 then is_correct end) as last2
+        from attempt_seq where rn <= 2
+        group by question_id
+      ),
+      ever_wrong as (
+        select distinct question_id from attempts
+        where user_id = ${user.id} and is_correct = false
+      )
+      select q.id, q.year, q.q_number, q.section, q.sub_topic, q.difficulty,
+             q.body_md, q.choices, q.is_numeric
+      from ever_wrong ew
+      left join last_two lt on lt.question_id = ew.question_id
+      join questions q on q.id = ew.question_id
+      where q.published = true
+        and not (lt.last1 is true and lt.last2 is true)
       order by random()
       limit 1
     `);

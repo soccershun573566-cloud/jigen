@@ -39,19 +39,37 @@ type SectionStats = {
 
 async function getWrongList(userId: string): Promise<Row[]> {
   try {
+    // 「過去に間違えた問題のうち、直近2回が連続正解で解除されていない」問題
     const result = await db.execute(sql`
-      with latest_wrong as (
-        select distinct on (question_id) question_id, attempted_at
+      with attempt_seq as (
+        select question_id, is_correct, attempted_at,
+               row_number() over (partition by question_id order by attempted_at desc) as rn
+        from attempts where user_id = ${userId}
+      ),
+      last_two as (
+        select question_id,
+               max(case when rn=1 then is_correct end) as last1,
+               max(case when rn=2 then is_correct end) as last2,
+               max(case when rn=1 then attempted_at end) as last_attempt
+        from attempt_seq where rn <= 2
+        group by question_id
+      ),
+      ever_wrong as (
+        select question_id, max(attempted_at) as last_wrong_at,
+               count(*) filter (where is_correct = false) as wrong_count
         from attempts
         where user_id = ${userId} and is_correct = false
-        order by question_id, attempted_at desc
+        group by question_id
       )
-      select q.id::text as id, q.section, q.sub_topic, q.body_md, lw.attempted_at,
-             (select count(*) from attempts a2 where a2.user_id = ${userId} and a2.question_id = q.id and a2.is_correct = false)::int as wrong_count
-      from latest_wrong lw
-      join questions q on q.id = lw.question_id
+      select q.id::text as id, q.section, q.sub_topic, q.body_md,
+             to_char(coalesce(lt.last_attempt, ew.last_wrong_at), 'YYYY-MM-DD"T"HH24:MI:SS') as attempted_at,
+             ew.wrong_count::int as wrong_count
+      from ever_wrong ew
+      left join last_two lt on lt.question_id = ew.question_id
+      join questions q on q.id = ew.question_id
       where q.published = true
-      order by lw.attempted_at desc
+        and not (lt.last1 is true and lt.last2 is true)
+      order by coalesce(lt.last_attempt, ew.last_wrong_at) desc
       limit 100
     `);
     const rows = (result as unknown as { rows?: Row[] }).rows
@@ -64,17 +82,28 @@ async function getWrongList(userId: string): Promise<Row[]> {
 
 async function getSummary(userId: string): Promise<Summary> {
   try {
-    // current_wrong: ユーザーが間違えた問題のうち、まだ正解していないもの
+    // current_wrong: 間違えたことがある問題のうち、直近2回連続正解で解除されていないもの
     const r1 = await db.execute(sql`
-      select count(*)::int as c from (
-        select question_id from attempts
-        where user_id = ${userId} and is_correct = false
+      with attempt_seq as (
+        select question_id, is_correct,
+               row_number() over (partition by question_id order by attempted_at desc) as rn
+        from attempts where user_id = ${userId}
+      ),
+      last_two as (
+        select question_id,
+               max(case when rn=1 then is_correct end) as last1,
+               max(case when rn=2 then is_correct end) as last2
+        from attempt_seq where rn <= 2
         group by question_id
-        having not exists (
-          select 1 from attempts a2
-          where a2.user_id = ${userId} and a2.question_id = attempts.question_id and a2.is_correct = true
-        )
-      ) t
+      ),
+      ever_wrong as (
+        select distinct question_id from attempts
+        where user_id = ${userId} and is_correct = false
+      )
+      select count(*)::int as c
+      from ever_wrong ew
+      left join last_two lt on lt.question_id = ew.question_id
+      where not (lt.last1 is true and lt.last2 is true)
     `);
     const r1rows = (r1 as unknown as { rows?: { c: number }[] }).rows
       ?? (r1 as unknown as { c: number }[]);
