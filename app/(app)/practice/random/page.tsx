@@ -18,7 +18,12 @@ type Phase = 'loading' | 'error' | 'ready';
 const QUEUE_KEY = 'jigen_question_queue_v1';
 const QUEUE_TARGET = 5; // 常にここまで先読みしておく(テンポ重視)
 
-type CachedQuestion = PracticeNextResponse & { choices?: unknown; isNumeric?: boolean };
+type CachedQuestion = PracticeNextResponse & {
+  choices?: unknown;
+  isNumeric?: boolean;
+  todaySolved?: number;
+  todayTarget?: number;
+};
 
 function extractChoices(choicesRaw: unknown): string[] {
   if (Array.isArray(choicesRaw)) {
@@ -103,6 +108,9 @@ export default function PracticeRandomPage() {
   const [errorMessage, setErrorMessage] = useState<string>('読み込みに失敗しました');
   const [reloadKey, setReloadKey] = useState(0);
   const [question, setQuestion] = useState<RunnerQuestion | null>(null);
+  // ジゲンAI v2: 今日の進捗(楽観更新)
+  const [todaySolved, setTodaySolved] = useState<number | undefined>(undefined);
+  const [todayTarget, setTodayTarget] = useState<number | undefined>(undefined);
   const refillingRef = useRef(false);
 
   useEffect(() => {
@@ -129,6 +137,9 @@ export default function PracticeRandomPage() {
         if (!chosen) throw new Error('問題が取得できませんでした');
 
         setQuestion(buildRunnerQuestion(chosen));
+        // サーバの今日の進捗で同期(キャッシュより新鮮)
+        if (typeof chosen.todaySolved === 'number') setTodaySolved(chosen.todaySolved);
+        if (typeof chosen.todayTarget === 'number') setTodayTarget(chosen.todayTarget);
         setPhase('ready');
 
         // 3) バックグラウンドでキュー補充(QUEUE_TARGET件まで)
@@ -166,6 +177,10 @@ export default function PracticeRandomPage() {
     }
     if (next) {
       setQuestion(buildRunnerQuestion(next));
+      // 次の問題のレスポンスに乗ってきた todaySolved でサーバ同期
+      // (楽観更新で +1 してたが、サーバの集計値が正確なのでこちらで上書き)
+      if (typeof next.todaySolved === 'number') setTodaySolved(next.todaySolved);
+      if (typeof next.todayTarget === 'number') setTodayTarget(next.todayTarget);
       // バックグラウンドでキュー補充(現在表示中のIDを除外)
       if (!refillingRef.current) {
         refillingRef.current = true;
@@ -179,7 +194,16 @@ export default function PracticeRandomPage() {
   if (phase === 'ready' && question) {
     // key に question.id を渡して、問題切替時に PracticeRunner を unmount/remount させる
     // (これがないと selectedIdx, phase, result などの state が前問のまま残ってしまう)
-    return <PracticeRunner key={question.id} question={question} onNext={handleNextInline} />;
+    return (
+      <PracticeRunner
+        key={question.id}
+        question={question}
+        onNext={handleNextInline}
+        todaySolved={todaySolved}
+        todayTarget={todayTarget}
+        onAnsweredDaily={() => setTodaySolved((n) => (typeof n === 'number' ? n + 1 : 1))}
+      />
+    );
   }
 
   return (

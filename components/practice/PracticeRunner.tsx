@@ -48,16 +48,73 @@ function pickRandom<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)] as T;
 }
 
+/**
+ * 今日の進捗バッジ。
+ * 目標未達: 「解いた問題 N/Mお問」(ゴールド)
+ * 目標達成: 「N/M 達成🎉 + N - M 問」(エメラルド・glow)
+ * 目標達成しても問題は出続けるので、達成後も継続が分かるようにする。
+ */
+function DailyProgressBadge({ solved, target }: { solved: number; target: number }) {
+  const reached = solved >= target;
+  const over = Math.max(0, solved - target);
+  const pct = Math.min(100, Math.round((solved / Math.max(1, target)) * 100));
+  return (
+    <div
+      role="status"
+      aria-label={`今日解いた問題 ${solved} / ${target}`}
+      className={cn(
+        'flex min-w-[120px] flex-col gap-0.5 rounded-md border px-2 py-1 text-[10px]',
+        reached
+          ? 'border-emerald-400/60 bg-emerald-500/10 text-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.25)]'
+          : 'border-jigen-gold/40 bg-jigen-bg-panel text-jigen-ink',
+      )}
+    >
+      <div className="flex items-baseline gap-1">
+        <span className="uppercase tracking-widest text-jigen-ink-mute">今日</span>
+        <span className="ml-auto tabular-nums">
+          <span className={cn('text-sm font-bold', reached ? 'text-emerald-300' : 'text-jigen-gold')}>
+            {solved}
+          </span>
+          <span className="text-jigen-ink-mute">/{target}</span>
+        </span>
+      </div>
+      <div className="h-1 overflow-hidden rounded-full bg-jigen-bg-panel-2">
+        <div
+          className={cn(
+            'h-full rounded-full transition-[width] duration-500',
+            reached ? 'bg-emerald-400' : 'bg-gold-gradient',
+          )}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {reached ? (
+        <p className="text-center text-[9px] font-semibold text-emerald-300">
+          目標達成 🎉 +{over}問
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function PracticeRunner({
   question,
   onNext,
   source = 'daily',
+  todaySolved,
+  todayTarget,
+  onAnsweredDaily,
 }: {
   question: RunnerQuestion;
   /** 「次の問題へ」を URLナビなしで即時切替するための親コールバック(任意) */
   onNext?: () => void | Promise<void>;
   /** どこから演習しているか。'mistakes' の場合は ホーム進捗にカウントしない */
   source?: 'daily' | 'mistakes' | 'other';
+  /** 今日解いた問題数(source='daily' のみ) */
+  todaySolved?: number;
+  /** 今日の目標問題数 */
+  todayTarget?: number;
+  /** 解答送信成功時に親側で楽観的に +1 するためのコールバック(daily のみ) */
+  onAnsweredDaily?: () => void;
 }) {
   const router = useRouter();
 
@@ -146,6 +203,8 @@ export function PracticeRunner({
       const data = (await res.json()) as AttemptSubmitResponse;
       setResult(data);
       setPhase('judged');
+      // 楽観: source='daily' の場合のみ今日の進捗を +1(親に通知)
+      if (source === 'daily' && onAnsweredDaily) onAnsweredDaily();
     } catch (e) {
       setErrorMessage((e as Error).message || '送信に失敗しました');
       setPhase('error');
@@ -186,9 +245,12 @@ export function PracticeRunner({
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 py-5 text-jigen-ink">
-      {/* 上部: 中断 / 教科ラベル */}
-      <div className="flex items-center justify-between">
+      {/* 上部: 中断 / 進捗バッジ / 教科ラベル */}
+      <div className="flex items-center justify-between gap-2">
         <InterruptDialog />
+        {source === 'daily' && typeof todaySolved === 'number' && typeof todayTarget === 'number' ? (
+          <DailyProgressBadge solved={todaySolved} target={todayTarget} />
+        ) : null}
         <span className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">
           {question.section} / {question.subTopic}
         </span>

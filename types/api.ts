@@ -92,8 +92,11 @@ export const PracticeNextResponse = z.object({
   bodyMd: z.string(),
   choices: z.unknown(),
   isNumeric: z.boolean(),
-  remainingToday: z.number(),
-  totalPublished: z.number(),
+  remainingToday: z.number().nullable(),
+  totalPublished: z.number().nullable(),
+  // ジゲンAI v2: 今日解いた数(source='daily')と1日目標数
+  todaySolved: z.number().optional(),
+  todayTarget: z.number().optional(),
 });
 export type PracticeNextResponse = z.infer<typeof PracticeNextResponse>;
 

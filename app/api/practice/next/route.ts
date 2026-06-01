@@ -51,6 +51,26 @@ type QuestionRow = {
 
 type PhaseWeights = { review: number; srs: number; adaptive: number };
 
+// 1日の目標問題数(後で users 設定や曜日から算出に置き換え)
+const TODAY_TARGET = 25;
+
+async function countSolvedTodayDaily(userId: string): Promise<number> {
+  try {
+    const r = await db.execute(sql`
+      select count(*)::int as c
+      from attempts
+      where user_id = ${userId}
+        and source = 'daily'
+        and (attempted_at at time zone 'Asia/Tokyo')::date
+            = (now() at time zone 'Asia/Tokyo')::date
+    `);
+    const rows = (r as unknown as { rows?: { c: number }[] }).rows ?? (r as unknown as { c: number }[]);
+    return rows?.[0]?.c ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export async function GET() {
   try {
     const user = await requireUser();
@@ -84,6 +104,8 @@ export async function GET() {
       );
     }
 
+    const todaySolved = await countSolvedTodayDaily(user.id);
+
     return NextResponse.json({
       id: row.id,
       year: row.year,
@@ -96,6 +118,8 @@ export async function GET() {
       isNumeric: row.is_numeric,
       remainingToday: null,
       totalPublished: null,
+      todaySolved,
+      todayTarget: TODAY_TARGET,
     });
   } catch (err) {
     if (err instanceof Response) return err;
