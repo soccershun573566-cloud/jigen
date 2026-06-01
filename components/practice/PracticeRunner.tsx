@@ -58,7 +58,12 @@ export function PracticeRunner({
 }) {
   const router = useRouter();
 
+  // choices が 5つ = 応用能力(五肢二択・正解2つを選ぶ)、それ以外は単一選択
+  const requiredAnswers = question.choices.length >= 5 ? 2 : 1;
+  const isMulti = requiredAnswers >= 2;
+
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [selectedSet, setSelectedSet] = useState<Set<number>>(() => new Set());
   const [phase, setPhase] = useState<Phase>('answering');
   const [result, setResult] = useState<AttemptSubmitResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -80,18 +85,40 @@ export function PracticeRunner({
   // 選択肢タップ: ハイライトのみ(まだ送信しない)
   function pickChoice(idx: number) {
     if (phase !== 'answering') return;
-    setSelectedIdx(idx);
+    if (isMulti) {
+      setSelectedSet((prev) => {
+        const next = new Set(prev);
+        if (next.has(idx)) {
+          next.delete(idx);
+        } else {
+          if (next.size >= requiredAnswers) {
+            // 3つ目を押した場合: 最も古い1つを外すよりも、最大数で打ち止めにする方が明確
+            return prev;
+          }
+          next.add(idx);
+        }
+        return next;
+      });
+    } else {
+      setSelectedIdx(idx);
+    }
   }
 
   // 「解答する」ボタン押下時に送信
   async function confirmAnswer() {
     if (phase !== 'answering') return;
-    if (selectedIdx === null) return;
-    const idx = selectedIdx;
+    if (isMulti) {
+      if (selectedSet.size !== requiredAnswers) return;
+    } else {
+      if (selectedIdx === null) return;
+    }
     setPhase('submitting');
 
     // DB の questions.answer は「正答番号(1始まり)」で格納。
-    const userAnswer = { value: idx + 1 };
+    // multi の場合は配列で送る。
+    const userAnswer = isMulti
+      ? { value: Array.from(selectedSet).map((i) => i + 1).sort((a, b) => a - b) }
+      : { value: (selectedIdx as number) + 1 };
     const responseSeconds = Math.max(
       0,
       Math.round((Date.now() - startedAt) / 1000),
@@ -131,16 +158,26 @@ export function PracticeRunner({
     router.push(`/practice/random?t=${Date.now()}`);
   }
 
-  // 正解選択肢のラベル(API レスポンスから推定)
-  const correctLabel: string | null = useMemo(() => {
-    if (!result) return null;
-    const a = result.correctAnswer as unknown;
-    if (typeof a === 'string') return a;
-    if (a && typeof a === 'object' && 'value' in (a as Record<string, unknown>)) {
-      const v = (a as { value: unknown }).value;
-      return typeof v === 'string' ? v : String(v);
+  // 正解選択肢の集合(API レスポンスから推定)
+  // 単一: { value: 3 } or 3 or "3"  → Set([3])
+  // 複数: [3, 5] or { value: [3, 5] } → Set([3, 5])
+  const correctSet: Set<number> = useMemo(() => {
+    const empty = new Set<number>();
+    if (!result) return empty;
+    const raw = result.correctAnswer as unknown;
+    const inner = raw && typeof raw === 'object' && 'value' in (raw as Record<string, unknown>)
+      ? (raw as { value: unknown }).value
+      : raw;
+    if (Array.isArray(inner)) {
+      const set = new Set<number>();
+      for (const x of inner) {
+        const n = Number(x);
+        if (Number.isFinite(n)) set.add(n);
+      }
+      return set;
     }
-    return null;
+    const n = Number(inner);
+    return Number.isFinite(n) ? new Set([n]) : empty;
   }, [result]);
 
   return (
@@ -171,11 +208,11 @@ export function PracticeRunner({
       {/* 選択肢 */}
       <ul className="flex flex-col gap-3" aria-label="選択肢">
         {question.choices.map((label, i) => {
-          const isPicked = selectedIdx === i;
-          const isCorrectOne =
-            phase === 'judged' && correctLabel !== null && label === correctLabel;
+          const isPicked = isMulti ? selectedSet.has(i) : selectedIdx === i;
+          // 正解選択肢: 番号(i+1)が正解集合に含まれる
+          const isCorrectOne = phase === 'judged' && correctSet.has(i + 1);
           const isWrongPicked =
-            phase === 'judged' && isPicked && result && !result.isCorrect;
+            phase === 'judged' && isPicked && !isCorrectOne && result && !result.isCorrect;
           const disabled = phase !== 'answering';
           return (
             <li key={i}>
@@ -225,23 +262,43 @@ export function PracticeRunner({
 
       {/* 解答ボタン(誤タップ防止: 選択→確認→送信) */}
       {(phase === 'answering' || phase === 'submitting') ? (
-        <div className="sticky bottom-4 z-10 flex justify-center">
+        <div className="sticky bottom-4 z-10 flex flex-col items-center gap-2">
+          {isMulti ? (
+            <p className="rounded-md bg-jigen-bg-panel/80 px-3 py-1 text-[11px] text-jigen-ink-soft backdrop-blur">
+              この問題は<span className="font-bold text-jigen-gold"> 2つ </span>選んでください
+            </p>
+          ) : null}
           <Button
             type="button"
             onClick={confirmAnswer}
-            disabled={selectedIdx === null || phase === 'submitting'}
+            disabled={
+              (isMulti ? selectedSet.size !== requiredAnswers : selectedIdx === null) ||
+              phase === 'submitting'
+            }
             className="h-14 min-w-[240px] rounded-xl bg-gold-gradient px-8 text-base font-bold text-slate-900 shadow-gold-glow transition-transform hover:scale-[1.02] hover:shadow-gold-glow-strong disabled:opacity-50 disabled:hover:scale-100"
             aria-label={
-              selectedIdx === null
-                ? '選択肢を選んでから解答してください'
-                : `選択肢 ${selectedIdx + 1} で解答する`
+              isMulti
+                ? selectedSet.size === 0
+                  ? '選択肢を選んでください'
+                  : selectedSet.size < requiredAnswers
+                    ? `あと${requiredAnswers - selectedSet.size}つ選んでください`
+                    : `選択肢 ${Array.from(selectedSet).map((i) => i + 1).sort().join(', ')} で解答する`
+                : selectedIdx === null
+                  ? '選択肢を選んでから解答してください'
+                  : `選択肢 ${selectedIdx + 1} で解答する`
             }
           >
             {phase === 'submitting'
               ? '採点中...'
-              : selectedIdx === null
-                ? '選択肢を選んでください'
-                : `解答する(${selectedIdx + 1}を選択中)`}
+              : isMulti
+                ? selectedSet.size === 0
+                  ? '選択肢を選んでください'
+                  : selectedSet.size < requiredAnswers
+                    ? `あと${requiredAnswers - selectedSet.size}つ選んでください`
+                    : `解答する(${Array.from(selectedSet).map((i) => i + 1).sort().join('・')}を選択中)`
+                : selectedIdx === null
+                  ? '選択肢を選んでください'
+                  : `解答する(${selectedIdx + 1}を選択中)`}
           </Button>
         </div>
       ) : null}
@@ -319,11 +376,11 @@ export function PracticeRunner({
                 id="practice-explanation"
                 className="border-t border-jigen-border-soft px-4 py-3 text-[14px] leading-relaxed text-jigen-ink-soft"
               >
-                {correctLabel ? (
+                {correctSet.size > 0 ? (
                   <p className="mb-2 text-xs text-jigen-ink-mute">
                     正解:{' '}
                     <span className="font-semibold text-jigen-gold">
-                      {correctLabel}
+                      {Array.from(correctSet).sort((a, b) => a - b).join('・')}
                     </span>
                   </p>
                 ) : null}
