@@ -17,6 +17,10 @@ import {
   Calendar,
   Mountain,
   Sparkles,
+  Brain,
+  RotateCw,
+  Zap,
+  TrendingDown,
 } from 'lucide-react';
 import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth/session';
@@ -187,6 +191,139 @@ async function getCurrentStreak(userId: string): Promise<number> {
   }
 }
 
+// ===== ジゲンAI v2: 今日の戦略 =====
+type Strategy = {
+  daysLeft: number | null;
+  phaseKey: 'foundation' | 'weakness' | 'final' | 'post' | 'unset';
+  phaseLabel: string;
+  weights: { review: number; srs: number; adaptive: number };
+  weakestSection: { section: string; pct: number; total: number } | null;
+  reviewDueCount: number;
+  srsDueCount: number;
+};
+
+function phaseFromDays(daysLeft: number | null): { key: Strategy['phaseKey']; label: string; weights: Strategy['weights'] } {
+  if (daysLeft == null)
+    return { key: 'unset', label: '基礎フェーズ', weights: { review: 0.35, srs: 0.15, adaptive: 0.50 } };
+  if (daysLeft < 0)
+    return { key: 'post', label: '試験後・復習フェーズ', weights: { review: 0.40, srs: 0.30, adaptive: 0.30 } };
+  if (daysLeft <= 30)
+    return { key: 'final', label: '直前フェーズ', weights: { review: 0.50, srs: 0.30, adaptive: 0.20 } };
+  if (daysLeft <= 90)
+    return { key: 'weakness', label: '弱点強化フェーズ', weights: { review: 0.30, srs: 0.25, adaptive: 0.45 } };
+  return { key: 'foundation', label: '基礎フェーズ', weights: { review: 0.35, srs: 0.15, adaptive: 0.50 } };
+}
+
+async function getStrategy(userId: string, sections: SectionStats[]): Promise<Strategy> {
+  // 1. 試験日からの残り日数
+  let daysLeft: number | null = null;
+  try {
+    const r = await db.execute(sql`
+      select (target_exam_date - current_date)::int as d
+      from users where id = ${userId} and target_exam_date is not null
+    `);
+    const rows = (r as unknown as { rows?: { d: number }[] }).rows ?? (r as unknown as { d: number }[]);
+    daysLeft = rows?.[0]?.d ?? null;
+  } catch {
+    daysLeft = null;
+  }
+
+  const phase = phaseFromDays(daysLeft);
+
+  // 2. 弱点教科(5問以上挑戦してる中で最低正答率)
+  const candidates = sections
+    .filter((s) => s.total >= 5)
+    .map((s) => ({ section: s.section, pct: pct(s.correct, s.total), total: s.total }))
+    .sort((a, b) => a.pct - b.pct);
+  const weakestSection = candidates[0] ?? null;
+
+  // 3. 復習(間違え)の件数
+  let reviewDueCount = 0;
+  try {
+    const r = await db.execute(sql`
+      with attempt_seq as (
+        select question_id, is_correct, attempted_at,
+               row_number() over (partition by question_id order by attempted_at desc) as rn
+        from attempts where user_id = ${userId}
+      ),
+      last_two as (
+        select question_id,
+               bool_or(case when rn=1 then is_correct end) as last1,
+               bool_or(case when rn=2 then is_correct end) as last2,
+               max(case when rn=1 then attempted_at end) as last_attempt
+        from attempt_seq where rn <= 2
+        group by question_id
+      ),
+      ever_wrong as (
+        select distinct question_id from attempts
+        where user_id = ${userId} and is_correct = false
+      )
+      select count(*)::int as c
+      from ever_wrong ew
+      join last_two lt on lt.question_id = ew.question_id
+      where (lt.last1 is not true or lt.last2 is not true)
+        and lt.last_attempt < now() - interval '2 days'
+    `);
+    const rows = (r as unknown as { rows?: { c: number }[] }).rows ?? (r as unknown as { c: number }[]);
+    reviewDueCount = rows?.[0]?.c ?? 0;
+  } catch {
+    reviewDueCount = 0;
+  }
+
+  // 4. SRS due 件数(連続正解数から推奨復習間隔を計算、期限到来)
+  let srsDueCount = 0;
+  try {
+    const r = await db.execute(sql`
+      with attempt_seq as (
+        select question_id, is_correct, attempted_at,
+               row_number() over (partition by question_id order by attempted_at desc) as rn
+        from attempts where user_id = ${userId}
+      ),
+      last_wrong as (
+        select question_id, min(rn) as wrong_rn
+        from attempt_seq where is_correct = false
+        group by question_id
+      ),
+      streak as (
+        select s.question_id,
+               count(*) filter (
+                 where s.is_correct = true
+                   and s.rn < coalesce((select wrong_rn from last_wrong lw where lw.question_id = s.question_id), 999)
+               )::int as correct_streak,
+               max(s.attempted_at) as last_attempt
+        from attempt_seq s
+        group by s.question_id
+      )
+      select count(*)::int as c
+      from streak
+      where correct_streak >= 1
+        and (now() - last_attempt) >
+          case correct_streak
+            when 1 then interval '1 day'
+            when 2 then interval '3 days'
+            when 3 then interval '7 days'
+            when 4 then interval '14 days'
+            when 5 then interval '30 days'
+            else interval '60 days'
+          end
+    `);
+    const rows = (r as unknown as { rows?: { c: number }[] }).rows ?? (r as unknown as { c: number }[]);
+    srsDueCount = rows?.[0]?.c ?? 0;
+  } catch {
+    srsDueCount = 0;
+  }
+
+  return {
+    daysLeft,
+    phaseKey: phase.key,
+    phaseLabel: phase.label,
+    weights: phase.weights,
+    weakestSection,
+    reviewDueCount,
+    srsDueCount,
+  };
+}
+
 async function getMistakesCount(userId: string): Promise<number> {
   try {
     const result = await db.execute(sql`
@@ -231,6 +368,9 @@ export default async function ProfilePage() {
     getCurrentStreak(user.id),
     getMistakesCount(user.id),
   ]);
+
+  // ジゲンAI v2: 今日の戦略を計算(sections に依存するので Promise.all 後)
+  const strategy = await getStrategy(user.id, sections);
 
   const overallPct = pct(overall.total_correct, overall.total_attempts);
   const overallGrade = gradeFromPct(overallPct);
@@ -315,6 +455,136 @@ export default async function ProfilePage() {
           <p className="mt-0.5 text-2xl font-bold tabular-nums text-jigen-warning">{mistakesCount}</p>
           <p className="text-[10px] text-jigen-ink-mute">復習推奨</p>
         </Link>
+      </section>
+
+      {/* ジゲン先生からの今日の戦略 */}
+      <section className="mb-4 rounded-2xl border border-jigen-gold/40 bg-panel-gradient p-4 shadow-panel">
+        <div className="mb-3 flex items-start gap-3">
+          <TiranoSensei size="sm" glow />
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-jigen-gold">
+              ジゲン先生からの今日の戦略
+            </p>
+            <p className="text-base font-bold text-jigen-ink">
+              {strategy.phaseLabel}
+              {strategy.daysLeft != null && strategy.daysLeft >= 0 && (
+                <span className="ml-2 text-xs font-medium text-jigen-ink-soft">
+                  (試験まで{strategy.daysLeft}日)
+                </span>
+              )}
+              {strategy.daysLeft == null && (
+                <span className="ml-2 text-xs font-medium text-jigen-ink-mute">
+                  (試験日未設定)
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* 出題比率バー(プール構成) */}
+        <div className="mb-3">
+          <p className="mb-1 text-[10px] uppercase tracking-widest text-jigen-ink-mute">
+            今日の出題構成
+          </p>
+          <div className="flex h-3 overflow-hidden rounded-full border border-jigen-border-soft">
+            <div
+              className="flex items-center justify-center bg-jigen-warning/80"
+              style={{ width: `${strategy.weights.review * 100}%` }}
+              title={`復習 ${Math.round(strategy.weights.review * 100)}%`}
+            />
+            <div
+              className="flex items-center justify-center bg-emerald-500/70"
+              style={{ width: `${strategy.weights.srs * 100}%` }}
+              title={`SRS ${Math.round(strategy.weights.srs * 100)}%`}
+            />
+            <div
+              className="flex items-center justify-center bg-gold-gradient"
+              style={{ width: `${strategy.weights.adaptive * 100}%` }}
+              title={`Adaptive ${Math.round(strategy.weights.adaptive * 100)}%`}
+            />
+          </div>
+          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-jigen-ink-soft">
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-2 w-2 rounded-full bg-jigen-warning/80" />
+              復習 {Math.round(strategy.weights.review * 100)}%
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500/70" />
+              忘却曲線(SRS) {Math.round(strategy.weights.srs * 100)}%
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-2 w-2 rounded-full bg-jigen-gold" />
+              弱点+ZPD {Math.round(strategy.weights.adaptive * 100)}%
+            </span>
+          </div>
+        </div>
+
+        {/* 3枚カード: 弱点 / 復習 due / SRS due */}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-lg border border-jigen-border-soft bg-jigen-bg-dark/60 p-2.5">
+            <div className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-jigen-ink-mute">
+              <TrendingDown aria-hidden className="h-3 w-3" />
+              弱点教科
+            </div>
+            {strategy.weakestSection ? (
+              <>
+                <p className="mt-0.5 truncate text-sm font-bold text-jigen-warning">
+                  {strategy.weakestSection.section}
+                </p>
+                <p className="text-[10px] tabular-nums text-jigen-ink-soft">
+                  {strategy.weakestSection.pct}%
+                </p>
+              </>
+            ) : (
+              <p className="mt-0.5 text-xs text-jigen-ink-mute">データ蓄積中</p>
+            )}
+          </div>
+          <div className="rounded-lg border border-jigen-border-soft bg-jigen-bg-dark/60 p-2.5">
+            <div className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-jigen-ink-mute">
+              <RotateCw aria-hidden className="h-3 w-3" />
+              復習対象
+            </div>
+            <p className="mt-0.5 text-sm font-bold text-jigen-ink">
+              <span className="text-xl tabular-nums text-jigen-warning">{strategy.reviewDueCount}</span>
+              <span className="ml-1 text-[10px] text-jigen-ink-soft">問</span>
+            </p>
+            <p className="text-[10px] text-jigen-ink-mute">2日以上前の間違え</p>
+          </div>
+          <div className="rounded-lg border border-jigen-border-soft bg-jigen-bg-dark/60 p-2.5">
+            <div className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-jigen-ink-mute">
+              <Brain aria-hidden className="h-3 w-3" />
+              忘却防止
+            </div>
+            <p className="mt-0.5 text-sm font-bold text-jigen-ink">
+              <span className="text-xl tabular-nums text-emerald-400">{strategy.srsDueCount}</span>
+              <span className="ml-1 text-[10px] text-jigen-ink-soft">問</span>
+            </p>
+            <p className="text-[10px] text-jigen-ink-mute">復習タイミング到来</p>
+          </div>
+        </div>
+
+        {/* 戦略コメント */}
+        <div className="mt-3 rounded-md border border-jigen-gold/20 bg-jigen-bg-dark/40 p-2.5">
+          <div className="flex items-start gap-1.5">
+            <Zap aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-jigen-gold" />
+            <p className="text-[11px] leading-relaxed text-jigen-ink-soft">
+              {strategy.phaseKey === 'unset' &&
+                `試験日を設定すると、残り日数に応じた最適な戦略をお伝えできます。今は基礎を満遍なくカバーしています。`}
+              {strategy.phaseKey === 'foundation' && strategy.weakestSection &&
+                `まだ試験まで余裕があるので、新規問題を中心に基礎を固めます。特に「${strategy.weakestSection.section}」の比重を上げて、苦手の芽を早めに摘んでいきましょう。`}
+              {strategy.phaseKey === 'foundation' && !strategy.weakestSection &&
+                `まだ試験まで余裕があるので、新規問題を中心に基礎を固めます。データが溜まると、苦手分野をピンポイントで補強できますよ。`}
+              {strategy.phaseKey === 'weakness' && strategy.weakestSection &&
+                `中盤戦です。「${strategy.weakestSection.section}」を中心に、弱点を一つずつ潰していきましょう。復習比率も少し上げています。`}
+              {strategy.phaseKey === 'weakness' && !strategy.weakestSection &&
+                `中盤戦です。弱点強化フェーズに入っています。データが溜まり次第、苦手分野を集中的にお出しします。`}
+              {strategy.phaseKey === 'final' &&
+                `本試験まで残りわずか。新規問題は控えめにし、これまで間違えた問題の総ざらいに集中します。総仕上げにかかりましょう。`}
+              {strategy.phaseKey === 'post' &&
+                `試験日を過ぎました。引き続き復習中心で力を維持しますか? 設定から試験日を更新できます。`}
+            </p>
+          </div>
+        </div>
       </section>
 
       {/* 教科別の達成率と判定 */}
