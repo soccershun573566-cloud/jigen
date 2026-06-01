@@ -330,7 +330,7 @@ export function PracticeRunner({ question }: { question: RunnerQuestion }) {
             <Button asChild variant="outline" className="border-jigen-border-soft text-jigen-ink hover:border-jigen-gold/60 hover:bg-jigen-bg-panel-2">
               <Link href="/home">
                 <Home aria-hidden className="mr-1 h-4 w-4" />
-                ホームへ
+                中断する
               </Link>
             </Button>
             <Button
