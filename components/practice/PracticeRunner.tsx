@@ -12,7 +12,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronDown, ChevronUp, Home, Shuffle, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Home, Shuffle, Timer, Target, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { InterruptDialog } from '@/components/practice/InterruptDialog';
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
@@ -48,11 +48,82 @@ function pickRandom<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)] as T;
 }
 
+// ============= 進捗バー / ストップウォッチ =============
+
+const SESSION_START_KEY_PREFIX = 'jigen_session_start_v1';
+
+function getJstDateStr(): string {
+  // Asia/Tokyo の YYYY-MM-DD を返す。日付境界(JST 00:00)でセッションリセット用
+  const d = new Date();
+  const jstMs = d.getTime() + 9 * 60 * 60 * 1000;
+  return new Date(jstMs).toISOString().slice(0, 10);
+}
+
+function getOrCreateSessionStart(): number {
+  if (typeof window === 'undefined') return Date.now();
+  const key = `${SESSION_START_KEY_PREFIX}_${getJstDateStr()}`;
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const t = parseInt(raw, 10);
+      if (Number.isFinite(t) && t > 0) return t;
+    }
+  } catch {}
+  const now = Date.now();
+  try {
+    localStorage.setItem(key, String(now));
+  } catch {}
+  return now;
+}
+
+function formatElapsed(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+
 /**
- * 今日の進捗バッジ。
- * 目標未達: 「解いた問題 N/Mお問」(ゴールド)
- * 目標達成: 「N/M 達成🎉 + N - M 問」(エメラルド・glow)
- * 目標達成しても問題は出続けるので、達成後も継続が分かるようにする。
+ * ストップウォッチ: 「今日の問題」を最初に開いた時刻からの累積経過時間
+ * - localStorage 保存で、リロード・問題切替を跨いで継続
+ * - JST日付が変わると新セッション扱い
+ */
+function StopwatchBadge() {
+  const [elapsed, setElapsed] = useState<number>(0);
+  useEffect(() => {
+    const start = getOrCreateSessionStart();
+    setElapsed(Math.floor((Date.now() - start) / 1000));
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - start) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div
+      role="timer"
+      aria-label={`経過時間 ${formatElapsed(elapsed)}`}
+      className="flex items-center gap-2 rounded-lg border border-jigen-border-soft bg-jigen-bg-panel px-3 py-2"
+    >
+      <Timer aria-hidden className="h-4 w-4 text-jigen-gold" />
+      <div className="flex flex-col leading-none">
+        <span className="text-[9px] uppercase tracking-widest text-jigen-ink-mute">
+          経過時間
+        </span>
+        <span className="mt-0.5 text-lg font-extrabold tabular-nums tracking-tight text-jigen-ink">
+          {formatElapsed(elapsed)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 今日の進捗バッジ(大きめ版)
+ * - 目標未達: ゴールド「N / 25問」+ プログレスバー
+ * - 目標達成: エメラルド「達成🎉 +N」+ プログレスバー満タン
+ * - 目標達成しても問題は出続ける
  */
 function DailyProgressBadge({ solved, target }: { solved: number; target: number }) {
   const reached = solved >= target;
@@ -63,22 +134,42 @@ function DailyProgressBadge({ solved, target }: { solved: number; target: number
       role="status"
       aria-label={`今日解いた問題 ${solved} / ${target}`}
       className={cn(
-        'flex min-w-[120px] flex-col gap-0.5 rounded-md border px-2 py-1 text-[10px]',
+        'flex flex-1 flex-col gap-1.5 rounded-lg border px-3 py-2 min-w-[160px]',
         reached
-          ? 'border-emerald-400/60 bg-emerald-500/10 text-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.25)]'
-          : 'border-jigen-gold/40 bg-jigen-bg-panel text-jigen-ink',
+          ? 'border-emerald-400/60 bg-emerald-500/10 shadow-[0_0_12px_rgba(52,211,153,0.25)]'
+          : 'border-jigen-gold/40 bg-jigen-bg-panel',
       )}
     >
-      <div className="flex items-baseline gap-1">
-        <span className="uppercase tracking-widest text-jigen-ink-mute">今日</span>
-        <span className="ml-auto tabular-nums">
-          <span className={cn('text-sm font-bold', reached ? 'text-emerald-300' : 'text-jigen-gold')}>
-            {solved}
+      <div className="flex items-center gap-2">
+        <Target
+          aria-hidden
+          className={cn('h-4 w-4', reached ? 'text-emerald-400' : 'text-jigen-gold')}
+        />
+        <div className="flex flex-col leading-none">
+          <span className="text-[9px] uppercase tracking-widest text-jigen-ink-mute">
+            {reached ? '目標達成' : '今日の問題'}
           </span>
-          <span className="text-jigen-ink-mute">/{target}</span>
-        </span>
+          <span className="mt-0.5 tabular-nums leading-none">
+            <span
+              className={cn(
+                'text-lg font-extrabold',
+                reached ? 'text-emerald-300' : 'text-jigen-gold',
+              )}
+            >
+              {solved}
+            </span>
+            <span className="ml-0.5 text-xs text-jigen-ink-mute">/ {target}問</span>
+          </span>
+        </div>
+        {reached ? (
+          <span className="ml-auto whitespace-nowrap rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+            🎉 +{over}
+          </span>
+        ) : (
+          <span className="ml-auto tabular-nums text-[10px] text-jigen-ink-mute">{pct}%</span>
+        )}
       </div>
-      <div className="h-1 overflow-hidden rounded-full bg-jigen-bg-panel-2">
+      <div className="h-1.5 overflow-hidden rounded-full bg-jigen-bg-panel-2">
         <div
           className={cn(
             'h-full rounded-full transition-[width] duration-500',
@@ -87,11 +178,6 @@ function DailyProgressBadge({ solved, target }: { solved: number; target: number
           style={{ width: `${pct}%` }}
         />
       </div>
-      {reached ? (
-        <p className="text-center text-[9px] font-semibold text-emerald-300">
-          目標達成 🎉 +{over}問
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -245,16 +331,23 @@ export function PracticeRunner({
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 py-5 text-jigen-ink">
-      {/* 上部: 中断 / 進捗バッジ / 教科ラベル */}
+      {/* 上部1段目: 中断 / 教科ラベル */}
       <div className="flex items-center justify-between gap-2">
         <InterruptDialog />
-        {source === 'daily' && typeof todaySolved === 'number' && typeof todayTarget === 'number' ? (
-          <DailyProgressBadge solved={todaySolved} target={todayTarget} />
-        ) : null}
         <span className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">
           {question.section} / {question.subTopic}
         </span>
       </div>
+
+      {/* 上部2段目: ストップウォッチ + 今日の進捗(daily のときのみ) */}
+      {source === 'daily' ? (
+        <div className="flex items-stretch gap-2">
+          <StopwatchBadge />
+          {typeof todaySolved === 'number' && typeof todayTarget === 'number' ? (
+            <DailyProgressBadge solved={todaySolved} target={todayTarget} />
+          ) : null}
+        </div>
+      ) : null}
 
       {/* 問題本文 */}
       <article
