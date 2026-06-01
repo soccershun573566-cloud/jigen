@@ -104,6 +104,8 @@ export const AttemptRequest = z.object({
   responseSeconds: z.number().int().min(0),
   confidence: z.number().int().min(1).max(3).optional(),
   dailyTaskId: z.string().uuid().optional(),
+  // 進捗カウント分離用 — 'daily'(デフォルト) / 'mistakes' / 'other'
+  source: z.enum(['daily', 'mistakes', 'other']).optional(),
 });
 export type AttemptRequest = z.infer<typeof AttemptRequest>;
 
