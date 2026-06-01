@@ -162,10 +162,8 @@ export function PracticeRunner({
           phase === 'judged' && result && !result.isCorrect && 'ring-1 ring-jigen-warning/50',
         )}
       >
-        <p className="text-[11px] uppercase tracking-widest text-jigen-ink-mute">
-          {question.year}年 第{question.qNumber}問
-        </p>
-        <div className="mt-3 whitespace-pre-line text-[15px] leading-relaxed text-jigen-ink">
+        {/* オーナー指示: 年度・AM/PM・問題番号はユーザー側に表示しない(オリジナル問題として提供) */}
+        <div className="whitespace-pre-line text-[15px] leading-relaxed text-jigen-ink">
           {question.bodyMd}
         </div>
       </article>
