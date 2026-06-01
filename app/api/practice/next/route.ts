@@ -113,7 +113,7 @@ async function pickReviewDue(userId: string): Promise<QuestionRow | null> {
     join last_two lt on lt.question_id = ew.question_id
     join questions q on q.id = ew.question_id
     where q.published = true
-      and not (lt.last1 is true and lt.last2 is true)
+      and (lt.last1 is not true or lt.last2 is not true)
       and lt.last_attempt < now() - interval '2 days'
     order by random()
     limit 1

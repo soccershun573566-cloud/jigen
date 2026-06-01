@@ -68,7 +68,7 @@ async function getWrongList(userId: string): Promise<Row[]> {
       left join last_two lt on lt.question_id = ew.question_id
       join questions q on q.id = ew.question_id
       where q.published = true
-        and not (lt.last1 is true and lt.last2 is true)
+        and (lt.last1 is not true or lt.last2 is not true)
       order by coalesce(lt.last_attempt, ew.last_wrong_at) desc
       limit 100
     `);
@@ -103,7 +103,7 @@ async function getSummary(userId: string): Promise<Summary> {
       select count(*)::int as c
       from ever_wrong ew
       left join last_two lt on lt.question_id = ew.question_id
-      where not (lt.last1 is true and lt.last2 is true)
+      where (lt.last1 is not true or lt.last2 is not true)
     `);
     const r1rows = (r1 as unknown as { rows?: { c: number }[] }).rows
       ?? (r1 as unknown as { c: number }[]);
