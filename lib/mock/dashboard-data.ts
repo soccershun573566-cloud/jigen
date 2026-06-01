@@ -106,11 +106,11 @@ export function getHomeV2(): HomeV2Data {
       'よく頑張ってるよ! 施工管理の問題の正答率が上がってきたね! ただ、法規の正答率が少し低いよ。明日は法規を重点的にやっていこう!',
     warning: '注意:法規の正答率が55%を下回っています',
     sidebarItems: [
-      { label: 'プロフィール', href: '/settings' },
-      { label: 'AI相談所', href: '/practice' },
-      { label: '◯× クイズ', href: '/practice' },
-      { label: '建築豆知識', href: '/mastery' },
-      { label: '間違えリスト', href: '/review' },
+      { label: 'プロフィール', href: '/profile' },
+      { label: 'AI相談所', href: '/coming-soon/mock-exam' },
+      { label: '◯× クイズ', href: '/coming-soon/mock-exam' },
+      { label: '建築豆知識', href: '/coming-soon/mock-exam' },
+      { label: '間違えリスト', href: '/mistakes' },
     ],
   };
 }
