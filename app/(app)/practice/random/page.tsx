@@ -151,7 +151,9 @@ export default function PracticeRandomPage() {
   }, [reloadKey, tQuery]);
 
   if (phase === 'ready' && question) {
-    return <PracticeRunner question={question} />;
+    // key に question.id を渡して、問題切替時に PracticeRunner を unmount/remount させる
+    // (これがないと selectedIdx, phase, result などの state が前問のまま残ってしまう)
+    return <PracticeRunner key={question.id} question={question} />;
   }
 
   return (
