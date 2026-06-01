@@ -1,12 +1,13 @@
 /**
  * GET /api/practice/next
- * ランダム公開問題1件を取得。
- *
- * 出題ロジック:
- *   - 50% の確率で「間違えリスト復習対象」(間違えた問題 & 直近2回連続正解で解除されていない
- *                                          & 最終attempt が 2日以上前) を優先出題
- *   - 残りは通常ランダム(直近24h挑戦済を除外)
- *   - 復習対象がない/抽選外なら通常ランダム
+ * 適応的に問題を出題:
+ *   - 50% の確率で「2日以上前+未解除の間違え」を優先(復習)
+ *   - 残り50% は「教科×小単元の弱点重み」で重み付きランダム
+ *     - 各 (section, sub_topic) ごとに正答率を集計
+ *     - 弱点ほど weight 高(1 - 正答率、最低0.2)
+ *     - データ少(<5問)の領域は重み0.5(中程度)
+ *     - PostgreSQL の `order by random() * weight desc limit 1` で重み付き選択
+ *   - 直近24h挑戦済を除外
  */
 import { NextResponse } from 'next/server';
 import { sql } from 'drizzle-orm';
@@ -34,16 +35,18 @@ export async function GET() {
 
     let row: QuestionRow | null = null;
 
-    // 50% の確率で復習問題を優先
+    // 50% の確率で復習問題(2日以上前+未解除間違え)
     if (Math.random() < 0.5) {
       row = await pickReviewDue(user.id);
     }
 
     if (!row) {
-      row = await pickRandom(user.id, true);
+      // 弱点重み付きの adaptive 出題
+      row = await pickAdaptive(user.id);
     }
     if (!row) {
-      row = await pickRandom(user.id, false);
+      // 完全フォールバック
+      row = await pickRandomFallback();
     }
 
     if (!row) {
@@ -83,10 +86,7 @@ function extractRow(result: unknown): QuestionRow | null {
 }
 
 /**
- * 復習対象(2日間隔):
- *   - 間違えたことがある
- *   - 直近2回連続正解で解除 ではない
- *   - 最終 attempt から 2日以上経過
+ * 復習対象(2日間隔・未解除の間違え)
  */
 async function pickReviewDue(userId: string): Promise<QuestionRow | null> {
   const result = await db.execute(sql`
@@ -121,26 +121,48 @@ async function pickReviewDue(userId: string): Promise<QuestionRow | null> {
   return extractRow(result);
 }
 
-async function pickRandom(userId: string, excludeRecent: boolean): Promise<QuestionRow | null> {
-  const result = excludeRecent
-    ? await db.execute(sql`
-        select id, year, q_number, section, sub_topic, difficulty, body_md, choices, is_numeric
-        from questions
-        where published = true
-          and id not in (
-            select question_id from attempts
-            where user_id = ${userId}
-              and attempted_at > now() - interval '24 hours'
-          )
-        order by random()
-        limit 1
-      `)
-    : await db.execute(sql`
-        select id, year, q_number, section, sub_topic, difficulty, body_md, choices, is_numeric
-        from questions
-        where published = true
-        order by random()
-        limit 1
-      `);
+/**
+ * 適応的出題(段階1+2):
+ *   - 教科×小単元の弱点重みで重み付きランダム
+ *   - データ少領域は中程度(0.5)
+ *   - 直近24h挑戦済は除外
+ */
+async function pickAdaptive(userId: string): Promise<QuestionRow | null> {
+  const result = await db.execute(sql`
+    with user_perf as (
+      select q.section, q.sub_topic,
+             count(*)::int as total,
+             count(*) filter (where a.is_correct)::int as correct
+      from attempts a join questions q on q.id = a.question_id
+      where a.user_id = ${userId}
+      group by q.section, q.sub_topic
+    )
+    select q.id, q.year, q.q_number, q.section, q.sub_topic, q.difficulty,
+           q.body_md, q.choices, q.is_numeric
+    from questions q
+    left join user_perf up on up.section = q.section and up.sub_topic = q.sub_topic
+    where q.published = true
+      and q.id not in (
+        select question_id from attempts
+        where user_id = ${userId} and attempted_at > now() - interval '24 hours'
+      )
+    order by random() *
+      case
+        when up.total is null or up.total < 5 then 0.5
+        else greatest(0.2, 1.0 - up.correct::float / nullif(up.total, 0))
+      end desc
+    limit 1
+  `);
+  return extractRow(result);
+}
+
+async function pickRandomFallback(): Promise<QuestionRow | null> {
+  const result = await db.execute(sql`
+    select id, year, q_number, section, sub_topic, difficulty, body_md, choices, is_numeric
+    from questions
+    where published = true
+    order by random()
+    limit 1
+  `);
   return extractRow(result);
 }
