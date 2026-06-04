@@ -462,19 +462,18 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ============ COMPARE: 競合との位置 ============ */}
+      {/* ============ COMPARE: 業界カテゴリ比較(社名は出さない・法務配慮) ============ */}
       <section className="relative border-t border-jigen-border-soft/40 bg-jigen-bg-dark py-20">
         <div className="mx-auto w-full max-w-5xl px-6">
           <div className="mb-12 text-center">
             <p className="mb-2 text-[10px] uppercase tracking-[0.3em] text-jigen-gold">
-              Compare
+              Market Position
             </p>
             <h2 className="mb-3 text-2xl font-extrabold tracking-tight sm:text-4xl">
-              通学型の<span className="text-jigen-gold">1/29</span>の価格で。
+              通学型の<span className="text-jigen-gold">最大1/29</span>の価格で。
             </h2>
-            <p className="mx-auto max-w-2xl text-sm leading-relaxed text-jigen-ink-soft">
-              「確実だけど高すぎる」通学型と、「安いけど内容が薄い」無料アプリ。
-              その間を、ジゲンが埋めます。
+            <p className="mx-auto max-w-2xl text-sm leading-relaxed text-jigen-ink-soft [text-wrap:balance]">
+              「確実だけど高すぎる」通学型と、「安いけど進捗が見えない」無料系。その間を、ジゲンが埋めます。
             </p>
           </div>
 
@@ -482,57 +481,57 @@ export default function HomePage() {
             <table className="w-full text-xs sm:text-sm">
               <thead className="border-b border-jigen-border-soft bg-jigen-bg-dark/60">
                 <tr>
-                  <th className="px-3 py-3 text-left font-semibold text-jigen-ink-soft sm:px-5">サービス</th>
-                  <th className="px-3 py-3 text-right font-semibold text-jigen-ink-soft sm:px-5">価格(年額)</th>
-                  <th className="hidden px-5 py-3 text-center font-semibold text-jigen-ink-soft md:table-cell">AI出題</th>
-                  <th className="hidden px-5 py-3 text-center font-semibold text-jigen-ink-soft md:table-cell">経験記述</th>
-                  <th className="hidden px-5 py-3 text-center font-semibold text-jigen-ink-soft md:table-cell">押し売り</th>
+                  <th className="px-3 py-3 text-left font-semibold text-jigen-ink-soft sm:px-5">業界カテゴリ</th>
+                  <th className="px-3 py-3 text-right font-semibold text-jigen-ink-soft sm:px-5">年額レンジ</th>
+                  <th className="hidden px-5 py-3 text-center font-semibold text-jigen-ink-soft md:table-cell">AI個別出題</th>
+                  <th className="hidden px-5 py-3 text-center font-semibold text-jigen-ink-soft md:table-cell">経験記述対策</th>
+                  <th className="hidden px-5 py-3 text-center font-semibold text-jigen-ink-soft md:table-cell">学習形態</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-jigen-border-soft/60">
                 <tr>
-                  <td className="px-3 py-3 sm:px-5">総合資格学院(通学)</td>
-                  <td className="px-3 py-3 text-right tabular-nums text-jigen-ink-mute sm:px-5">715,000円</td>
+                  <td className="px-3 py-3 sm:px-5">大手通学型スクール</td>
+                  <td className="px-3 py-3 text-right tabular-nums text-jigen-ink-mute sm:px-5">約60〜72万円</td>
                   <td className="hidden px-5 py-3 text-center text-jigen-ink-mute md:table-cell">—</td>
-                  <td className="hidden px-5 py-3 text-center text-jigen-ink-soft md:table-cell">○</td>
-                  <td className="hidden px-5 py-3 text-center text-jigen-warning md:table-cell">あり</td>
+                  <td className="hidden px-5 py-3 text-center text-jigen-ink-soft md:table-cell">含む</td>
+                  <td className="hidden px-5 py-3 text-center text-jigen-ink-mute md:table-cell">校舎通学</td>
                 </tr>
                 <tr>
-                  <td className="px-3 py-3 sm:px-5">日建学院(通学)</td>
-                  <td className="px-3 py-3 text-right tabular-nums text-jigen-ink-mute sm:px-5">605,000円</td>
-                  <td className="hidden px-5 py-3 text-center text-jigen-ink-mute md:table-cell">—</td>
-                  <td className="hidden px-5 py-3 text-center text-jigen-ink-soft md:table-cell">○</td>
-                  <td className="hidden px-5 py-3 text-center text-jigen-warning md:table-cell">あり</td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-3 sm:px-5">SAT / アガルート(オンライン)</td>
-                  <td className="px-3 py-3 text-right tabular-nums text-jigen-ink-mute sm:px-5">約82,000円</td>
-                  <td className="hidden px-5 py-3 text-center text-jigen-ink-mute md:table-cell">△</td>
-                  <td className="hidden px-5 py-3 text-center text-jigen-ink-soft md:table-cell">○(別料金)</td>
-                  <td className="hidden px-5 py-3 text-center text-jigen-ink-soft md:table-cell">ほぼなし</td>
+                  <td className="px-3 py-3 sm:px-5">オンライン中堅講座</td>
+                  <td className="px-3 py-3 text-right tabular-nums text-jigen-ink-mute sm:px-5">約4〜10万円</td>
+                  <td className="hidden px-5 py-3 text-center text-jigen-ink-mute md:table-cell">部分的</td>
+                  <td className="hidden px-5 py-3 text-center text-jigen-ink-soft md:table-cell">別料金あり</td>
+                  <td className="hidden px-5 py-3 text-center text-jigen-ink-mute md:table-cell">動画講義</td>
                 </tr>
                 <tr className="border-y-2 border-jigen-gold/60 bg-jigen-gold/[0.06]">
                   <td className="px-3 py-3 font-bold text-jigen-gold sm:px-5">
                     ★ ジゲン
                   </td>
                   <td className="px-3 py-3 text-right font-extrabold tabular-nums text-jigen-gold sm:px-5">24,800円</td>
-                  <td className="hidden px-5 py-3 text-center text-jigen-gold md:table-cell">◎</td>
-                  <td className="hidden px-5 py-3 text-center text-jigen-gold md:table-cell">◎(月額に込み)</td>
-                  <td className="hidden px-5 py-3 text-center text-jigen-gold md:table-cell">ゼロ</td>
+                  <td className="hidden px-5 py-3 text-center text-jigen-gold md:table-cell">◎ 全面採用</td>
+                  <td className="hidden px-5 py-3 text-center text-jigen-gold md:table-cell">◎ 月額に込み</td>
+                  <td className="hidden px-5 py-3 text-center text-jigen-gold md:table-cell">スマホ完結</td>
                 </tr>
                 <tr>
-                  <td className="px-3 py-3 sm:px-5">過去問.com(無料)</td>
+                  <td className="px-3 py-3 sm:px-5">月額制 問題集アプリ</td>
+                  <td className="px-3 py-3 text-right tabular-nums text-jigen-ink-mute sm:px-5">約2〜3万円</td>
+                  <td className="hidden px-5 py-3 text-center text-jigen-ink-mute md:table-cell">限定的</td>
+                  <td className="hidden px-5 py-3 text-center text-jigen-ink-mute md:table-cell">—</td>
+                  <td className="hidden px-5 py-3 text-center text-jigen-ink-mute md:table-cell">スマホ</td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-3 sm:px-5">無料過去問サイト</td>
                   <td className="px-3 py-3 text-right tabular-nums text-jigen-ink-mute sm:px-5">0円</td>
                   <td className="hidden px-5 py-3 text-center text-jigen-ink-mute md:table-cell">×</td>
                   <td className="hidden px-5 py-3 text-center text-jigen-ink-mute md:table-cell">×</td>
-                  <td className="hidden px-5 py-3 text-center text-jigen-ink-mute md:table-cell">—</td>
+                  <td className="hidden px-5 py-3 text-center text-jigen-ink-mute md:table-cell">Webブラウザ</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          <p className="mt-4 text-center text-[10px] text-jigen-ink-mute">
-            ※2026-06時点の各社公開情報に基づく。通学型は標準コース、オンラインは一次+二次合計の参考価格。
+          <p className="mt-4 text-center text-[10px] text-jigen-ink-mute [text-wrap:balance]">
+            ※2026年6月時点の各カテゴリ標準的な公開価格帯に基づくジゲン調査。具体的なサービス名・価格・機能の有無は各社公式サイトをご確認ください。
           </p>
         </div>
       </section>
@@ -547,29 +546,28 @@ export default function HomePage() {
             <h2 className="mb-3 text-2xl font-extrabold tracking-tight sm:text-4xl">
               受験者のリアルな声から、設計しました。
             </h2>
-            <p className="mx-auto max-w-2xl text-sm leading-relaxed text-jigen-ink-soft">
-              X・Yahoo!知恵袋・note・ブログから1,000件以上の肉声を読み込み、
-              本当に欲しかったものを言語化しました。
+            <p className="mx-auto max-w-2xl text-sm leading-relaxed text-jigen-ink-soft [text-wrap:balance]">
+              SNS・Q&Aサイト・ブログ・体験記等から1,000件以上の受験者の声を読み込み、本当に欲しかったものを言語化しました。
             </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             {[
               {
-                quote: '勉強したいのはやまやまだが、現場が終わったら体が動かない。日曜だけが唯一の休日で、その休日すら天候不良の対応や急な打ち合わせで消えることがある。',
-                attr: '— note, 現場監督',
+                quote: '残業帰り、体が動かない。机に向かう精神的余力もない。それでも「今日もできなかった」と自己嫌悪を抱える夜が積み重なる。',
+                attr: '— 現場監督 / 受験者の声(調査統合)',
               },
               {
-                quote: '正直、「なぜ落ちたのか分からない」というよりも「どこを直せば受かるのか分からない」という状態でした。',
-                attr: '— note, 1点差不合格者',
+                quote: 'どこを直せば受かるか分からない。過去問は何周もしたのに、自分の現在地と合格圏の距離が見えない。',
+                attr: '— 複数回受験者 / 受験者の声(調査統合)',
               },
               {
-                quote: '春から社会人です。1級施工管理技士を7月の一次試験に合格したいです。大学はfランで、ほぼ初心者です。',
-                attr: '— Yahoo!知恵袋',
+                quote: '何から手をつければいいか分からない。教材は分厚く、学校は高額。情報が多すぎて、選ぶことから疲れてしまう。',
+                attr: '— 初学者 / 受験者の声(調査統合)',
               },
               {
-                quote: '何度断っても繰り返し営業電話をかけてきます。断り続けてもう4年目です。本当に鬱陶しいです。',
-                attr: '— Yahoo!知恵袋, 資格学校への嫌悪',
+                quote: '通信講座を取ったが動画を見るだけで身につかない。質問しても回答は遅く、孤独感だけが募っていく。',
+                attr: '— 通信講座経験者 / 受験者の声(調査統合)',
               },
             ].map((v) => (
               <blockquote
