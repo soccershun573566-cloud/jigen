@@ -6,7 +6,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
   ArrowRight,
+  BarChart3,
   Brain,
+  CalendarCheck,
   Check,
   ChevronRight,
   Clock,
@@ -18,6 +20,7 @@ import {
   Sparkles,
   Target,
   TrendingDown,
+  Trophy,
   Zap,
 } from 'lucide-react';
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
@@ -81,22 +84,19 @@ export default function HomePage() {
             1級建築施工管理技士 / AI Companion
           </p>
 
-          {/* メインコピー */}
+          {/* メインコピー: 詩的に2行固定 */}
           <h1 className="mb-5 text-center text-[34px] font-extrabold leading-[1.15] tracking-tight text-jigen-ink sm:text-5xl md:text-6xl">
-            夜の机に、
-            <br className="sm:hidden" />
-            <span className="bg-gold-gradient bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(245,196,65,0.35)]">
+            <span className="block">夜の机に、</span>
+            <span className="block bg-gold-gradient bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(245,196,65,0.35)]">
               AIの伴走者を。
             </span>
           </h1>
 
-          {/* コンセプト文 */}
-          <p className="mb-8 max-w-2xl text-center text-base leading-relaxed text-jigen-ink-soft sm:text-lg">
+          {/* コンセプト文: 自然な折り返し */}
+          <p className="mb-8 max-w-2xl text-center text-base leading-relaxed text-jigen-ink-soft [text-wrap:balance] sm:text-lg">
             あなたの時間・ペースに合わせて
             <span className="font-semibold text-jigen-ink">合格までサポート</span>
-            する、
-            <br className="hidden sm:inline" />
-            資格取得のための
+            する、資格取得のための
             <span className="font-semibold text-jigen-gold">AI伴走パートナー</span>。
           </p>
 
@@ -192,9 +192,8 @@ export default function HomePage() {
             <p className="text-[10px] uppercase tracking-[0.25em] text-jigen-ink-mute">
               受験者の心境を、ぎゅっと
             </p>
-            <p className="mt-2 text-base font-bold text-jigen-gold sm:text-lg">
-              「疲弊と孤独の中、向かう先が見えぬまま<br />
-              自己嫌悪を抱える夜の机で。」
+            <p className="mt-2 text-base font-bold text-jigen-gold [text-wrap:balance] sm:text-lg">
+              「疲弊と孤独の中、向かう先が見えぬまま自己嫌悪を抱える夜の机で。」
             </p>
           </div>
         </div>
@@ -210,10 +209,8 @@ export default function HomePage() {
             <h2 className="mb-3 text-2xl font-extrabold tracking-tight sm:text-4xl">
               AIが、あなたの代わりに走ります。
             </h2>
-            <p className="mx-auto max-w-2xl text-sm leading-relaxed text-jigen-ink-soft sm:text-base">
-              弱点を見つけるのも、忘れた頃に思い出させるのも、経験記述を磨くのも、夜中に話を聞くのも。
-              <br />
-              <span className="text-jigen-gold">あなたは、解くだけ。</span>
+            <p className="mx-auto max-w-2xl text-sm leading-relaxed text-jigen-ink-soft [text-wrap:balance] sm:text-base">
+              弱点を見つけるのも、忘れた頃に思い出させるのも、経験記述を磨くのも、夜中に話を聞くのも。<span className="ml-1 text-jigen-gold">あなたは、解くだけ。</span>
             </p>
           </div>
 
@@ -321,6 +318,77 @@ export default function HomePage() {
               </ul>
             </article>
           </div>
+        </div>
+      </section>
+
+      {/* ============ MONTHLY MOCK EXAM: 月末模試 ============ */}
+      <section className="relative border-t border-jigen-border-soft/40 bg-jigen-bg-dark py-20">
+        <div className="mx-auto w-full max-w-5xl px-6">
+          <div className="mb-12 text-center">
+            <p className="mb-2 text-[10px] uppercase tracking-[0.3em] text-jigen-gold">
+              Monthly Mock Exam
+            </p>
+            <h2 className="mb-3 text-2xl font-extrabold tracking-tight sm:text-4xl">
+              毎月末、本番形式の模試で<span className="text-jigen-gold">現在地</span>を確認。
+            </h2>
+            <p className="mx-auto max-w-2xl text-sm leading-relaxed text-jigen-ink-soft [text-wrap:balance] sm:text-base">
+              「やった気になる」を防ぐ最大の仕掛けが、月末模試。試験本番と同じ形式で、今のあなたが合格圏のどこにいるかを毎月測れます。
+            </p>
+          </div>
+
+          <div className="mx-auto max-w-4xl rounded-2xl border border-jigen-gold/40 bg-panel-gradient p-8 shadow-panel">
+            <div className="grid gap-8 sm:grid-cols-[auto_1fr] sm:items-center">
+              {/* 左: 模試アイコン */}
+              <div className="flex justify-center sm:justify-start">
+                <div className="relative">
+                  <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-gold-gradient text-jigen-bg-dark shadow-gold-glow">
+                    <Trophy aria-hidden className="h-12 w-12" />
+                  </div>
+                  <CalendarCheck
+                    aria-hidden
+                    className="absolute -right-2 -bottom-2 h-8 w-8 rounded-full border-2 border-jigen-bg-dark bg-jigen-bg-panel p-1.5 text-jigen-gold"
+                  />
+                </div>
+              </div>
+
+              {/* 右: 説明 */}
+              <div>
+                <h3 className="mb-3 text-xl font-extrabold text-jigen-ink sm:text-2xl">
+                  月末模試 — Monthly Check
+                </h3>
+                <ul className="space-y-2.5 text-sm text-jigen-ink-soft">
+                  <li className="flex items-start gap-2">
+                    <BarChart3 aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-jigen-gold" />
+                    <span><span className="font-semibold text-jigen-ink">本番と同じ問題数・形式</span>で実戦感覚を養う</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Target aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-jigen-gold" />
+                    <span>結果は<span className="font-semibold text-jigen-ink">教科別スコア</span>+合格圏までの距離を可視化</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <TrendingDown aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-jigen-gold" />
+                    <span>翌月の<span className="font-semibold text-jigen-ink">AI出題ロジック</span>に模試結果が反映される</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Clock aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-jigen-gold" />
+                    <span>受験タイミングは<span className="font-semibold text-jigen-ink">月末ウィンドウ</span>から自由に選択</span>
+                  </li>
+                </ul>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-jigen-gold/40 bg-jigen-bg-dark/60 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-jigen-gold">
+                    全プラン共通
+                  </span>
+                  <span className="rounded-full border border-jigen-border-soft bg-jigen-bg-dark/60 px-3 py-1 text-[10px] uppercase tracking-widest text-jigen-ink-mute">
+                    月1回 / 追加課金なし
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p className="mt-6 text-center text-xs text-jigen-ink-mute [text-wrap:balance]">
+            模試の結果は、翌月のAI出題プランへ自動連動。「やったまま放置」を構造的に防ぎます。
+          </p>
         </div>
       </section>
 
@@ -661,16 +729,13 @@ export default function HomePage() {
         />
         <div className="relative mx-auto w-full max-w-3xl px-6 text-center">
           <h2 className="mb-4 text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl">
-            夜の机に、
-            <br className="sm:hidden" />
-            <span className="bg-gold-gradient bg-clip-text text-transparent">
+            <span className="block">夜の机に、</span>
+            <span className="block bg-gold-gradient bg-clip-text text-transparent">
               AIの伴走者を。
             </span>
           </h2>
-          <p className="mx-auto mb-8 max-w-xl text-sm leading-relaxed text-jigen-ink-soft sm:text-base">
-            あなたの時間・ペースに合わせて、合格まで。
-            <br />
-            まずは7日間、無料で体験してみてください。
+          <p className="mx-auto mb-8 max-w-xl text-sm leading-relaxed text-jigen-ink-soft [text-wrap:balance] sm:text-base">
+            あなたの時間・ペースに合わせて、合格まで。まずは7日間、無料で体験してみてください。
           </p>
           <Link
             href="/auth/signup"
