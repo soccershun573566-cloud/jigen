@@ -71,7 +71,7 @@ export default async function BillingPage() {
     <main className="mx-auto w-full max-w-3xl px-4 py-6 text-jigen-ink">
       {/* ヘッダ */}
       <div className="mb-6">
-        <h1 className="text-2xl font-extrabold tracking-wide text-jigen-gold drop-shadow-[0_0_12px_rgba(245,196,65,0.35)]">
+        <h1 className="text-2xl font-extrabold tracking-wide text-jigen-ink">
           プラン管理
         </h1>
         <p className="mt-1 text-sm text-jigen-ink">
