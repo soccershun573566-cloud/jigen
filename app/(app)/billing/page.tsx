@@ -71,10 +71,10 @@ export default async function BillingPage() {
     <main className="mx-auto w-full max-w-3xl px-4 py-6 text-jigen-ink">
       {/* ヘッダ */}
       <div className="mb-6">
-        <h1 className="text-2xl font-extrabold tracking-wide text-jigen-ink drop-shadow-[0_0_8px_rgba(245,196,65,0.25)]">
+        <h1 className="text-2xl font-extrabold tracking-wide text-jigen-gold drop-shadow-[0_0_12px_rgba(245,196,65,0.35)]">
           プラン管理
         </h1>
-        <p className="mt-1 text-sm text-jigen-ink-soft">
+        <p className="mt-1 text-sm text-jigen-ink">
           ジゲンの全機能を、 あなたの時間・ペースで。
         </p>
       </div>
@@ -177,7 +177,7 @@ export default async function BillingPage() {
       ) : null}
 
       {/* リスク低減バッジ */}
-      <section className="mb-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 rounded-xl border border-jigen-gold/30 bg-jigen-bg-panel/40 p-4 text-[11px] text-jigen-ink-soft">
+      <section className="mb-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 rounded-xl border border-jigen-gold/30 bg-jigen-bg-panel p-4 text-[12px] font-medium text-jigen-ink">
         <span className="inline-flex items-center gap-1.5">
           <ShieldCheck aria-hidden className="h-3.5 w-3.5 text-jigen-gold" />
           7日間完全無料
@@ -198,9 +198,9 @@ export default async function BillingPage() {
 
       {/* 解約セクション */}
       {active ? (
-        <section className="mb-6 rounded-xl border border-jigen-border-soft bg-jigen-bg-panel/60 p-5">
+        <section className="mb-6 rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-5">
           <p className="text-sm font-bold text-jigen-ink">解約について</p>
-          <p className="mt-2 text-xs text-jigen-ink-soft">
+          <p className="mt-2 text-xs leading-relaxed text-jigen-ink">
             解約しても、 次回更新日まではすべての機能をご利用いただけます。
             <br />
             無料トライアル期間中の解約なら、 一切の課金は発生しません。
