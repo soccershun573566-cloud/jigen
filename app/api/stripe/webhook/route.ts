@@ -125,9 +125,11 @@ async function setCanceledAt(subscriptionId: string): Promise<void> {
 }
 
 async function attachCustomer(userId: string, customerId: string): Promise<void> {
+  // checkout.session.completed 時の処理。stripe_customer_id だけ紐付けて、
+  // status/plan は subscription.created イベント受信時に正しく上書きする。
   await db.execute(sql`
     insert into subscriptions (user_id, stripe_customer_id, plan, status, created_at, updated_at)
-    values (${userId}::uuid, ${customerId}, 'free'::plan_type, 'trialing'::subscription_status, now(), now())
+    values (${userId}::uuid, ${customerId}, 'free'::plan_type, 'free'::subscription_status, now(), now())
     on conflict (user_id) do update set
       stripe_customer_id = excluded.stripe_customer_id,
       updated_at = now()
