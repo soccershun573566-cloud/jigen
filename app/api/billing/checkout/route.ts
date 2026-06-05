@@ -24,8 +24,13 @@ export async function POST(req: Request) {
       success_url: `${appUrl}/billing?status=success`,
       cancel_url: `${appUrl}/home`,
       subscription_data: {
+        // 7日間無料トライアル(クレカ登録は必要・課金は8日目から)
+        trial_period_days: 7,
         metadata: { user_id: user.id },
       },
+      // クレカ登録は必要だが、トライアル中は¥0
+      payment_method_collection: 'always',
+      allow_promotion_codes: true,
     });
 
     return NextResponse.json({ url: session.url });
