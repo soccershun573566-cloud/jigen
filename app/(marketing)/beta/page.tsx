@@ -24,10 +24,14 @@ import {
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
 
 export const metadata: Metadata = {
-  title: 'ジゲンβ版 30名限定募集 | 残り41日、合格まで一緒に走る',
+  title: 'ジゲンβ版 30名限定募集 | 1級建築施工管理技士のAI伴走パートナー',
   description:
-    '2026年7月の1次試験まで残り41日。AI伴走パートナー「ジゲン」が30名限定でβ版を募集中。月額¥980×3ヶ月、完走者は永久¥1,490ロック特典付き。直前期モード+初回模試50問+二次経験記述AI添削。',
+    '2026年7月の1次試験までAI伴走パートナー「ジゲン」が30名限定でβ版を募集中。月額¥980×3ヶ月、完走者は永久¥1,490ロック特典付き。直前期モード+初回模試50問+二次経験記述AI添削。',
 };
+
+// 日付計算を毎リクエストで実行(毎日0:00 JSTでカウントダウン更新)
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 // 試験日と限定数(本番では env or DB)
 const EXAM_DATE = '2026-07-19';
@@ -115,31 +119,6 @@ export default function BetaPage() {
             <ArrowRight aria-hidden className="h-5 w-5 transition-transform group-hover:translate-x-1" />
           </Link>
           <p className="mt-3 text-[11px] text-jigen-ink-mute">7日間完全無料 / クレジットカード登録は必要(8日目から¥980課金)</p>
-        </div>
-      </section>
-
-      {/* ============ なぜβ募集か ============ */}
-      <section className="relative border-t border-jigen-border-soft/40 bg-jigen-bg-dark py-16">
-        <div className="mx-auto w-full max-w-4xl px-6">
-          <div className="mb-10 text-center">
-            <p className="mb-2 text-[10px] uppercase tracking-[0.3em] text-jigen-gold">Why Beta</p>
-            <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
-              なぜ、 今 <span className="text-jigen-gold">β募集</span> なのか
-            </h2>
-          </div>
-          <div className="mx-auto max-w-3xl rounded-2xl border border-jigen-gold/30 bg-panel-gradient p-6 shadow-panel sm:p-8">
-            <p className="text-sm leading-relaxed text-jigen-ink-soft sm:text-base">
-              ジゲンは <span className="font-bold text-jigen-ink">月¥2,980 で本ローンチ予定</span> ですが、
-              2026年7月の1次試験までは残り{dleft}日。
-              この駆け込み期間を共に走り、 <span className="font-bold text-jigen-gold">最初の合格者</span> を一緒に作るために、
-              <span className="font-bold text-jigen-ink"> {BETA_LIMIT}名限定 </span>
-              で破格のβ枠を開放します。
-            </p>
-            <p className="mt-4 text-sm leading-relaxed text-jigen-ink-soft sm:text-base">
-              あなたの学習データと、 解いた問題の手応え、 「ここが分かりにくい」 「もっとこうしたい」 のフィードバックが、
-              そのままジゲンを進化させます。 <span className="font-bold text-jigen-gold">β参加者は共同創業者</span> です。
-            </p>
-          </div>
         </div>
       </section>
 
