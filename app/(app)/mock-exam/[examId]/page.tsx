@@ -212,7 +212,7 @@ export default function MockExamPage() {
             </li>
             <li className="flex items-start gap-2">
               <Check aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-jigen-gold" />
-              翌日からの 1日25問が、 あなたの弱点に最適化される
+              翌日から、 あなたの弱点に最適化されます
             </li>
             <li className="flex items-start gap-2">
               <Check aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-jigen-gold" />
