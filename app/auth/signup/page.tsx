@@ -1,24 +1,44 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useState, Suspense } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 
-// S02 サインアップ
-// ユウ§7 トーン: 淡々・媚びない・励ましすぎない
-// ユウ§H-1: 利用規約・プラポリへの明示同意(チェックボックス必須)
+function SignupForm() {
+  const params = useSearchParams();
+  const isBeta = params.get('beta') === '1';
 
-export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const supabase = createClient();
+
+  async function startBetaCheckout() {
+    try {
+      const res = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ plan: 'beta' }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        throw new Error(data?.error?.message ?? `HTTP ${res.status}`);
+      }
+      window.location.href = data.url;
+    } catch (e) {
+      // Checkout に行けない場合は、 一旦ホームへ
+      setError((e as Error).message || 'チェックアウトに失敗しました');
+      window.location.href = '/home';
+    }
+  }
 
   async function handleEmail(e: React.FormEvent) {
     e.preventDefault();
@@ -28,18 +48,24 @@ export default function SignupPage() {
       return;
     }
     setLoading(true);
-    // TODO(ナギ): emailRedirectTo の URL を本番ドメインに切り替え可能か検証
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback${isBeta ? '?beta=1' : ''}`,
+      },
     });
     setLoading(false);
     if (error) {
       setError(error.message);
       return;
     }
-    window.location.href = '/home';
+    // β経由ならStripe checkout へ、 通常版は /home へ
+    if (isBeta) {
+      await startBetaCheckout();
+    } else {
+      window.location.href = '/home';
+    }
   }
 
   async function handleGoogle() {
@@ -48,10 +74,11 @@ export default function SignupPage() {
       return;
     }
     setError(null);
-    // TODO(ナギ): OAuth 完了後の同意記録(consent log)を Supabase 側で残す
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback${isBeta ? '?beta=1' : ''}`,
+      },
     });
   }
 
@@ -59,12 +86,29 @@ export default function SignupPage() {
     <main className="min-h-screen bg-background">
       <div className="container mx-auto max-w-sm px-4 py-12 md:py-16">
         <header>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">
-            7日間ためす
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            クレジットカードの登録は必要ありません。
-          </p>
+          {isBeta ? (
+            <>
+              <span className="inline-block rounded-full border border-jigen-warning/60 bg-jigen-warning-soft/15 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-jigen-warning">
+                30名限定 β枠
+              </span>
+              <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+                β枠に申し込む
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                ¥980/月で<span className="font-semibold text-foreground">即日学習スタート</span>。
+                登録後すぐStripe決済画面に進みます。
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+                7日間ためす
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                クレジットカードの登録は必要ありません。
+              </p>
+            </>
+          )}
         </header>
 
         <form onSubmit={handleEmail} className="mt-8 space-y-5" noValidate>
@@ -128,9 +172,11 @@ export default function SignupPage() {
             size="lg"
             className="w-full min-h-12 text-base"
             disabled={loading}
-            aria-label="メールアドレスで新規登録"
+            aria-label={isBeta ? 'β枠に申し込む' : 'メールアドレスで新規登録'}
           >
-            {loading ? '登録中...' : '始める'}
+            {loading
+              ? (isBeta ? '登録中...' : '登録中...')
+              : (isBeta ? '登録して決済画面へ進む(¥980/月)' : '始める')}
           </Button>
         </form>
 
@@ -149,24 +195,32 @@ export default function SignupPage() {
           size="lg"
           onClick={handleGoogle}
           className="w-full min-h-12 text-base"
-          aria-label="Googleアカウントで新規登録"
+          aria-label={isBeta ? 'Googleアカウントでβ枠申し込み' : 'Googleアカウントで新規登録'}
         >
-          Googleで始める
+          {isBeta ? 'Googleでβ枠申し込み' : 'Googleで始める'}
         </Button>
 
         <p className="mt-8 text-sm text-muted-foreground">
           すでにアカウントをお持ちの方は{' '}
-          <Link href="/auth/login" className="underline underline-offset-4 hover:text-foreground">
+          <Link href={isBeta ? '/auth/login?beta=1' : '/auth/login'} className="underline underline-offset-4 hover:text-foreground">
             ログインはこちら
           </Link>
         </p>
 
         <p className="mt-4 text-xs text-muted-foreground">
-          <Link href="/lp" className="underline underline-offset-4 hover:text-foreground">
+          <Link href={isBeta ? '/beta' : '/'} className="underline underline-offset-4 hover:text-foreground">
             トップへ戻る
           </Link>
         </p>
       </div>
     </main>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
   );
 }
