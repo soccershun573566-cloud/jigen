@@ -7,7 +7,7 @@ import { MarketingFooter } from '@/components/marketing/MarketingFooter';
 
 export const dynamic = 'force-static';
 
-const SUPPORT_EMAIL = 'support@sekokan-jigen.app';
+const SUPPORT_EMAIL = 'support@jigen-app.com';
 
 export const metadata: Metadata = {
   title: 'お問い合わせ',
