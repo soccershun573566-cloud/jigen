@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import { Loader2, ArrowRight } from 'lucide-react';
 
-type Plan = 'monthly' | 'yearly';
+type Plan = 'monthly' | 'yearly' | 'beta';
 
-export function CheckoutButton({ plan }: { plan: Plan }) {
+export function CheckoutButton({ plan, label }: { plan: Plan; label?: string }) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
 
@@ -48,7 +48,7 @@ export function CheckoutButton({ plan }: { plan: Plan }) {
           </>
         ) : (
           <>
-            {plan === 'monthly' ? '月額プランで始める' : '年額プランで始める'}
+            {label ?? (plan === 'monthly' ? '月額プランで始める' : plan === 'yearly' ? '年額プランで始める' : 'β枠に申し込む')}
             <ArrowRight aria-hidden className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </>
         )}

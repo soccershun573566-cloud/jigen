@@ -177,7 +177,7 @@ export type WeeklyReportResponse = z.infer<typeof WeeklyReportResponse>;
 
 // ============ /api/billing/checkout (POST) ============
 export const CheckoutRequest = z.object({
-  plan: z.enum(['monthly', 'yearly']),
+  plan: z.enum(['monthly', 'yearly', 'beta']),
 });
 export type CheckoutRequest = z.infer<typeof CheckoutRequest>;
 

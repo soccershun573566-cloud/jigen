@@ -22,11 +22,12 @@ import {
   Zap,
 } from 'lucide-react';
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
+import { CheckoutButton } from '@/components/billing/CheckoutButton';
 
 export const metadata: Metadata = {
   title: 'ジゲンβ版 30名限定募集 | 1級建築施工管理技士のAI伴走パートナー',
   description:
-    '2026年7月の1次試験までAI伴走パートナー「ジゲン」が30名限定でβ版を募集中。月額¥980×3ヶ月、完走者は永久¥1,490ロック特典付き。直前期モード+初回模試50問+二次経験記述AI添削。',
+    '2026年7月の1次試験まで直前駆け込み層を救う、AI伴走パートナー「ジゲン」のβ版。月額¥980で即日学習スタート(無料期間なし)、完走者は永久¥1,490ロック特典付き。30名限定。',
 };
 
 // 日付計算を毎リクエストで実行(毎日0:00 JSTでカウントダウン更新)
@@ -115,10 +116,10 @@ export default function BetaPage() {
             href="/auth/signup?beta=1"
             className="group inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-gold-gradient px-10 text-lg font-extrabold text-jigen-bg-dark shadow-gold-glow-strong transition-all hover:scale-[1.03]"
           >
-            β枠に応募する
+            β枠に申し込む(¥980/月)
             <ArrowRight aria-hidden className="h-5 w-5 transition-transform group-hover:translate-x-1" />
           </Link>
-          <p className="mt-3 text-[11px] text-jigen-ink-mute">7日間完全無料 / クレジットカード登録は必要(8日目から¥980課金)</p>
+          <p className="mt-3 text-[11px] text-jigen-ink-mute">即日学習スタート / クレジットカード決済 / 解約はワンタップ</p>
         </div>
       </section>
 
@@ -282,26 +283,21 @@ export default function BetaPage() {
             </h2>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-5 text-center">
-              <p className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">7日無料</p>
-              <p className="mt-2 text-3xl font-extrabold tabular-nums text-jigen-ink">¥0</p>
-              <p className="mt-1 text-[11px] text-jigen-ink-soft">登録後7日間</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl border-2 border-jigen-gold bg-panel-gradient p-6 text-center shadow-gold-glow">
+              <p className="text-[10px] uppercase tracking-widest text-jigen-gold">β期間(2026/06〜08)</p>
+              <p className="mt-2 text-4xl font-extrabold tabular-nums text-jigen-gold">¥980<span className="text-sm font-normal text-jigen-ink-soft">/月</span></p>
+              <p className="mt-1 text-[11px] text-jigen-ink-soft">登録即日からアクセス可能(無料期間なし)</p>
             </div>
-            <div className="rounded-xl border-2 border-jigen-gold bg-panel-gradient p-5 text-center shadow-gold-glow">
-              <p className="text-[10px] uppercase tracking-widest text-jigen-gold">β期間 3ヶ月</p>
-              <p className="mt-2 text-3xl font-extrabold tabular-nums text-jigen-gold">¥980<span className="text-sm font-normal">/月</span></p>
-              <p className="mt-1 text-[11px] text-jigen-ink-soft">2026年6月〜8月限定</p>
-            </div>
-            <div className="rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-5 text-center">
+            <div className="rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-6 text-center">
               <p className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">完走後 永久</p>
-              <p className="mt-2 text-3xl font-extrabold tabular-nums text-jigen-ink">¥1,490<span className="text-sm font-normal">/月</span></p>
+              <p className="mt-2 text-4xl font-extrabold tabular-nums text-jigen-ink">¥1,490<span className="text-sm font-normal text-jigen-ink-soft">/月</span></p>
               <p className="mt-1 text-[11px] text-jigen-ink-soft">完走特典・値上げなし</p>
             </div>
           </div>
 
-          <p className="mt-6 text-center text-[11px] text-jigen-ink-mute">
-            ※β完走に至らなかった場合、 9月以降は通常価格¥2,980/月に移行(その時点で解約可能)
+          <p className="mt-6 text-center text-[11px] text-jigen-ink-mute [text-wrap:balance]">
+            ※直前駆け込み層に時間ロスをさせないため、 β版は無料期間を設けません。 解約はいつでもワンタップで可能・課金分も日割り清算となります。
           </p>
         </div>
       </section>
@@ -334,7 +330,7 @@ export default function BetaPage() {
             <ArrowRight aria-hidden className="h-5 w-5 transition-transform group-hover:translate-x-1" />
           </Link>
           <p className="mt-4 text-[11px] text-jigen-ink-mute">
-            7日間完全無料 / クレカ登録あり / 1分で完了
+            即日学習スタート / クレジットカード決済 / 解約はワンタップ
           </p>
         </div>
       </section>
