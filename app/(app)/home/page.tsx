@@ -15,7 +15,21 @@ import { db } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const TODAY_TARGET = 25; // 1日のデフォルト目標問題数(後で users 設定から取得)
+const DEFAULT_TODAY_TARGET = 25; // フォールバック値(users.daily_target_questions が無い場合)
+
+async function getDailyTarget(userId: string): Promise<number> {
+  try {
+    const r = await db.execute(sql`
+      select daily_target_questions from users where id = ${userId} limit 1
+    `);
+    const rows = (r as unknown as { rows?: Array<{ daily_target_questions: number }> }).rows
+      ?? (r as unknown as Array<{ daily_target_questions: number }>);
+    const v = rows?.[0]?.daily_target_questions;
+    return typeof v === 'number' && v > 0 ? v : DEFAULT_TODAY_TARGET;
+  } catch {
+    return DEFAULT_TODAY_TARGET;
+  }
+}
 
 async function isOnboarded(userId: string): Promise<boolean> {
   try {
@@ -78,15 +92,16 @@ export default async function HomePage() {
     redirect('/onboarding');
   }
 
+  const todayTarget = user ? await getDailyTarget(user.id) : DEFAULT_TODAY_TARGET;
   const todaySolved = user ? await getTodaySolved(user.id) : 0;
-  const progressPct = TODAY_TARGET > 0 ? Math.min(100, Math.round((todaySolved / TODAY_TARGET) * 100)) : 0;
+  const progressPct = todayTarget > 0 ? Math.min(100, Math.round((todaySolved / todayTarget) * 100)) : 0;
   const initialMock = user ? await getInitialMockStatus(user.id) : { status: 'unstarted' as const };
 
   const data = {
     ...mock,
     today: {
       ...mock.today,
-      totalQuestions: TODAY_TARGET,
+      totalQuestions: todayTarget,
       solvedQuestions: todaySolved,
       progressPct,
     },

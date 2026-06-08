@@ -51,8 +51,22 @@ type QuestionRow = {
 
 type PhaseWeights = { review: number; srs: number; adaptive: number };
 
-// 1日の目標問題数(後で users 設定や曜日から算出に置き換え)
-const TODAY_TARGET = 25;
+// 1日の目標問題数(users.daily_target_questions から取得・未設定なら25)
+const DEFAULT_TODAY_TARGET = 25;
+
+async function getTodayTarget(userId: string): Promise<number> {
+  try {
+    const r = await db.execute(sql`
+      select daily_target_questions from users where id = ${userId} limit 1
+    `);
+    const rows = (r as unknown as { rows?: Array<{ daily_target_questions: number }> }).rows
+      ?? (r as unknown as Array<{ daily_target_questions: number }>);
+    const v = rows?.[0]?.daily_target_questions;
+    return typeof v === 'number' && v > 0 ? v : DEFAULT_TODAY_TARGET;
+  } catch {
+    return DEFAULT_TODAY_TARGET;
+  }
+}
 
 async function countSolvedTodayDaily(userId: string): Promise<number> {
   try {
@@ -104,7 +118,10 @@ export async function GET() {
       );
     }
 
-    const todaySolved = await countSolvedTodayDaily(user.id);
+    const [todaySolved, todayTarget] = await Promise.all([
+      countSolvedTodayDaily(user.id),
+      getTodayTarget(user.id),
+    ]);
 
     return NextResponse.json({
       id: row.id,
@@ -119,7 +136,7 @@ export async function GET() {
       remainingToday: null,
       totalPublished: null,
       todaySolved,
-      todayTarget: TODAY_TARGET,
+      todayTarget,
     });
   } catch (err) {
     if (err instanceof Response) return err;
