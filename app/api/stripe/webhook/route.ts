@@ -181,6 +181,28 @@ export async function POST(req: Request) {
         if (userId && customerId) {
           await attachCustomer(userId, customerId);
         }
+        // 買い切り(mode: 'payment')の場合は licenses に登録
+        if (userId && session.mode === 'payment') {
+          const plan = session.metadata?.plan;
+          const validUntil = session.metadata?.valid_until;
+          const paidAmount = session.amount_total ?? 0;
+          if (plan && validUntil) {
+            await db.execute(sql`
+              insert into licenses (user_id, plan_type, stripe_session_id, stripe_payment_intent_id, valid_until, paid_amount, paid_at, created_at)
+              values (
+                ${userId}::uuid,
+                ${plan},
+                ${session.id},
+                ${typeof session.payment_intent === 'string' ? session.payment_intent : null},
+                ${validUntil}::timestamptz,
+                ${paidAmount},
+                now(),
+                now()
+              )
+              on conflict (stripe_session_id) do nothing
+            `);
+          }
+        }
         break;
       }
       case 'customer.subscription.created':

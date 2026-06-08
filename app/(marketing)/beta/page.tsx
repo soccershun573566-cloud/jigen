@@ -101,14 +101,14 @@ export default function BetaPage() {
 
           {/* 価格バッジ */}
           <div className="mb-6 inline-flex items-baseline gap-3 rounded-2xl border-2 border-jigen-gold bg-panel-gradient px-6 py-4 shadow-gold-glow">
-            <span className="text-[10px] uppercase tracking-widest text-jigen-gold">β特別価格</span>
+            <span className="text-[10px] uppercase tracking-widest text-jigen-gold">β1次プラン</span>
             <span className="text-4xl font-extrabold tabular-nums text-jigen-gold drop-shadow-[0_0_12px_rgba(245,196,65,0.4)]">
               ¥980
             </span>
-            <span className="text-xs text-jigen-ink-soft">/月 × 3ヶ月</span>
+            <span className="text-xs text-jigen-ink-soft">買い切り</span>
           </div>
           <p className="mb-8 max-w-lg text-center text-[11px] text-jigen-ink-mute [text-wrap:balance]">
-            通常¥2,980 → β限定 ¥980 / 完走者は永久¥1,490ロック特典付き
+            <span className="font-bold text-jigen-gold">2026/07/20まで使い放題</span> / サブスクなし・即日学習スタート
           </p>
 
           {/* CTA */}
@@ -116,10 +116,10 @@ export default function BetaPage() {
             href="/auth/signup?beta=1"
             className="group inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-gold-gradient px-10 text-lg font-extrabold text-jigen-bg-dark shadow-gold-glow-strong transition-all hover:scale-[1.03]"
           >
-            β枠に申し込む(¥980/月)
+            β1次プランを購入(¥980 一括)
             <ArrowRight aria-hidden className="h-5 w-5 transition-transform group-hover:translate-x-1" />
           </Link>
-          <p className="mt-3 text-[11px] text-jigen-ink-mute">即日学習スタート / クレジットカード決済 / 解約はワンタップ</p>
+          <p className="mt-3 text-[11px] text-jigen-ink-mute">買い切り / 即日学習スタート / Stripe決済</p>
         </div>
       </section>
 
@@ -285,19 +285,20 @@ export default function BetaPage() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-xl border-2 border-jigen-gold bg-panel-gradient p-6 text-center shadow-gold-glow">
-              <p className="text-[10px] uppercase tracking-widest text-jigen-gold">β期間(2026/06〜08)</p>
-              <p className="mt-2 text-4xl font-extrabold tabular-nums text-jigen-gold">¥980<span className="text-sm font-normal text-jigen-ink-soft">/月</span></p>
-              <p className="mt-1 text-[11px] text-jigen-ink-soft">登録即日からアクセス可能(無料期間なし)</p>
+              <p className="text-[10px] uppercase tracking-widest text-jigen-gold">β1次プラン</p>
+              <p className="mt-2 text-4xl font-extrabold tabular-nums text-jigen-gold">¥980<span className="ml-1 text-sm font-normal text-jigen-ink-soft">買い切り</span></p>
+              <p className="mt-1 text-[11px] text-jigen-ink-soft">2026/07/20まで使い放題</p>
             </div>
             <div className="rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-6 text-center">
-              <p className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">完走後 永久</p>
-              <p className="mt-2 text-4xl font-extrabold tabular-nums text-jigen-ink">¥1,490<span className="text-sm font-normal text-jigen-ink-soft">/月</span></p>
-              <p className="mt-1 text-[11px] text-jigen-ink-soft">完走特典・値上げなし</p>
+              <p className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">β2次プラン</p>
+              <p className="mt-2 text-4xl font-extrabold tabular-nums text-jigen-ink">¥1,480<span className="ml-1 text-sm font-normal text-jigen-ink-soft">買い切り</span></p>
+              <p className="mt-1 text-[11px] text-jigen-ink-soft">2026/10/19まで使い放題</p>
+              <p className="mt-2 text-[10px] text-jigen-gold">β1次プラン購入者は ¥980 でアップグレード可能</p>
             </div>
           </div>
 
           <p className="mt-6 text-center text-[11px] text-jigen-ink-mute [text-wrap:balance]">
-            ※直前駆け込み層に時間ロスをさせないため、 β版は無料期間を設けません。 解約はいつでもワンタップで可能・課金分も日割り清算となります。
+            ※β版は買い切り(サブスクではない)。 期間内は機能全部使い放題・追加課金なし。 自動で課金が継続される仕組みは一切ありません。
           </p>
         </div>
       </section>

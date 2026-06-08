@@ -26,7 +26,7 @@ function SignupForm() {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ plan: 'beta' }),
+        body: JSON.stringify({ plan: 'beta_first' }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) {

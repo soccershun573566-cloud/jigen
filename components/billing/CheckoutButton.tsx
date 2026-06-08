@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Loader2, ArrowRight } from 'lucide-react';
 
-type Plan = 'monthly' | 'yearly' | 'beta';
+type Plan = 'monthly' | 'yearly' | 'beta' | 'beta_first' | 'beta_second_new' | 'beta_second_upgrade';
 
 export function CheckoutButton({ plan, label }: { plan: Plan; label?: string }) {
   const [loading, setLoading] = useState(false);

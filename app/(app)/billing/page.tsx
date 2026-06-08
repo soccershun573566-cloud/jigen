@@ -1,12 +1,9 @@
-// /billing — プラン選択&購読管理(ジゲンブランド)
-// - 月額/年額の2プラン
-// - 7日無料トライアル明示
-// - 現在の契約状態表示
-// - 解約導線
+// /billing — プラン選択 & 購読/ライセンス管理(2026-06-08 大刷新)
+// β版は買い切り(licenses)、 通常版はサブスク(subscriptions)で別管理
 import { sql } from 'drizzle-orm';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Check, ShieldCheck, Sparkles } from 'lucide-react';
+import { Calendar, Check, ShieldCheck, Sparkles } from 'lucide-react';
 import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth/session';
 import { CheckoutButton } from '@/components/billing/CheckoutButton';
@@ -17,36 +14,52 @@ export const revalidate = 0;
 
 type SubRow = {
   plan: 'monthly' | 'yearly' | 'free';
-  plan_label: string | null;
   status: 'trialing' | 'active' | 'past_due' | 'canceled' | 'free';
   trial_ends_at: string | null;
   current_period_end: string | null;
-  canceled_at: string | null;
+};
+type LicenseRow = {
+  plan_type: 'beta_first' | 'beta_second_new' | 'beta_second_upgrade';
+  valid_until: string;
+  paid_amount: number;
+  paid_at: string;
 };
 
 async function getSubscription(userId: string): Promise<SubRow | null> {
   try {
     const r = await db.execute(sql`
-      select plan, plan_label, status, trial_ends_at, current_period_end, canceled_at
+      select plan, status, trial_ends_at, current_period_end
       from subscriptions where user_id = ${userId}::uuid limit 1
     `);
     const rows = (r as unknown as { rows?: SubRow[] }).rows ?? (r as unknown as SubRow[]);
     return rows?.[0] ?? null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
-function planLabel(sub: { plan: string; plan_label?: string | null }): string {
-  const label = sub.plan_label ?? sub.plan;
-  if (label === 'beta') return 'β限定プラン';
-  if (label === 'monthly') return '月額プラン';
-  if (label === 'yearly') return '年額プラン';
-  return 'フリープラン';
+async function getActiveLicenses(userId: string): Promise<LicenseRow[]> {
+  try {
+    const r = await db.execute(sql`
+      select plan_type, valid_until, paid_amount, paid_at
+      from licenses
+      where user_id = ${userId}::uuid and valid_until > now()
+      order by valid_until desc
+    `);
+    const rows = (r as unknown as { rows?: LicenseRow[] }).rows ?? (r as unknown as LicenseRow[]);
+    return rows ?? [];
+  } catch { return []; }
 }
 
-function isBeta(sub: { plan_label?: string | null }): boolean {
-  return sub?.plan_label === 'beta';
+function licensePlanLabel(plan: string): string {
+  if (plan === 'beta_first') return 'β1次プラン';
+  if (plan === 'beta_second_new') return 'β2次プラン';
+  if (plan === 'beta_second_upgrade') return 'β2次プラン(β1次からのアップグレード)';
+  return plan;
+}
+
+function fmt(ts: string | null): string {
+  if (!ts) return '—';
+  try { return new Date(ts).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }); }
+  catch { return ts; }
 }
 
 function statusLabel(s: string): { label: string; tone: 'gold' | 'warn' | 'mute' } {
@@ -57,191 +70,153 @@ function statusLabel(s: string): { label: string; tone: 'gold' | 'warn' | 'mute'
   return { label: 'フリープラン', tone: 'mute' };
 }
 
-function fmt(ts: string | null): string {
-  if (!ts) return '—';
-  try {
-    return new Date(ts).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
-  } catch {
-    return ts;
-  }
-}
-
 export default async function BillingPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/auth/login');
 
-  const sub = await getSubscription(user.id);
-  const active = sub && ['trialing', 'active', 'past_due'].includes(sub.status);
+  const [sub, licenses] = await Promise.all([
+    getSubscription(user.id),
+    getActiveLicenses(user.id),
+  ]);
+
+  const hasBetaFirst = licenses.some(l => l.plan_type === 'beta_first');
+  const hasBetaSecond = licenses.some(l => l.plan_type === 'beta_second_new' || l.plan_type === 'beta_second_upgrade');
+  const subActive = sub && ['trialing', 'active', 'past_due'].includes(sub.status);
   const status = statusLabel(sub?.status ?? 'free');
-  const beta = sub ? isBeta(sub) : false;
+
+  // 何らかの有効プランがあるか
+  const hasAnyActive = subActive || licenses.length > 0;
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-6 text-jigen-ink">
-      {/* ヘッダ */}
       <div className="mb-6">
-        <h1 className="text-2xl font-extrabold tracking-wide text-jigen-ink">
-          プラン管理
-        </h1>
-        <p className="mt-1 text-sm text-jigen-ink">
-          ジゲンの全機能を、 あなたの時間・ペースで。
-        </p>
+        <h1 className="text-2xl font-extrabold tracking-wide text-jigen-ink">プラン管理</h1>
+        <p className="mt-1 text-sm text-jigen-ink">あなたの時間・ペースで合格まで。</p>
       </div>
 
-      {/* 現在の契約状態 */}
-      <section className="mb-6 rounded-2xl border border-jigen-gold/30 bg-panel-gradient p-5 shadow-panel">
-        <p className="text-[10px] uppercase tracking-[0.25em] text-jigen-ink-mute">
-          現在の契約
-        </p>
-        <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <p className="text-lg font-bold text-jigen-ink">
-            {planLabel({ plan: sub?.plan ?? 'free', plan_label: sub?.plan_label ?? null })}
-          </p>
-          <span
-            className={
-              'rounded-full px-3 py-0.5 text-xs font-semibold ' +
-              (status.tone === 'gold'
-                ? 'bg-jigen-gold/15 text-jigen-gold'
-                : status.tone === 'warn'
-                  ? 'bg-jigen-warning/15 text-jigen-warning'
-                  : 'bg-jigen-bg-panel-2 text-jigen-ink-mute')
-            }
-          >
-            {status.label}
-          </span>
-        </div>
-        {sub?.status === 'trialing' && sub.trial_ends_at ? (
-          <p className="mt-3 text-xs text-jigen-ink-soft">
-            無料期間は <span className="font-semibold text-jigen-gold">{fmt(sub.trial_ends_at)}</span> まで。 以降は自動的に有料プランへ移行します。
-          </p>
-        ) : null}
-        {sub?.current_period_end && sub.status !== 'trialing' ? (
-          <p className="mt-3 text-xs text-jigen-ink-soft">
-            次回更新日: <span className="font-semibold text-jigen-ink">{fmt(sub.current_period_end)}</span>
-          </p>
-        ) : null}
-      </section>
-
-      {/* プラン選択(契約なし or フリーのみ) */}
-      {!active ? (
-        <section className="mb-6 grid gap-4 sm:grid-cols-2">
-          <article className="relative rounded-2xl border border-jigen-border-soft bg-jigen-bg-panel p-6 shadow-panel">
-            <p className="mb-1 text-[10px] uppercase tracking-[0.25em] text-jigen-ink-mute">
-              月額プラン
-            </p>
-            <p className="mb-4 text-4xl font-extrabold tabular-nums">
-              ¥2,980<span className="ml-1 text-sm font-normal text-jigen-ink-soft">/月</span>
-            </p>
-            <ul className="mb-6 space-y-2 text-xs text-jigen-ink-soft">
-              <li className="flex items-start gap-2">
-                <Check aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-jigen-gold" />
-                全機能アクセス
-              </li>
-              <li className="flex items-start gap-2">
-                <Check aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-jigen-gold" />
-                7日間無料(クレカ登録は必要・期間内解約で課金なし)
-              </li>
-              <li className="flex items-start gap-2">
-                <Check aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-jigen-gold" />
-                いつでもワンタップ解約
-              </li>
-            </ul>
-            <CheckoutButton plan="monthly" />
-          </article>
-
-          <article className="relative overflow-hidden rounded-2xl border-2 border-jigen-gold bg-panel-gradient p-6 shadow-gold-glow">
-            <span className="absolute right-4 top-4 rounded-full bg-gold-gradient px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-jigen-bg-dark">
-              おすすめ
-            </span>
-            <p className="mb-1 text-[10px] uppercase tracking-[0.25em] text-jigen-gold">
-              年額プラン
-            </p>
-            <p className="mb-1 text-4xl font-extrabold tabular-nums">
-              ¥24,800<span className="ml-1 text-sm font-normal text-jigen-ink-soft">/年</span>
-            </p>
-            <p className="mb-4 text-xs text-jigen-ink-soft">
-              月換算 <span className="font-semibold text-jigen-gold">¥2,067</span> (30%お得)
-            </p>
-            <ul className="mb-6 space-y-2 text-xs text-jigen-ink-soft">
-              <li className="flex items-start gap-2">
-                <Check aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-jigen-gold" />
-                全機能アクセス
-              </li>
-              <li className="flex items-start gap-2">
-                <Check aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-jigen-gold" />
-                7日間無料(期間内解約で課金なし)
-              </li>
-              <li className="flex items-start gap-2">
-                <Check aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-jigen-gold" />
-                試験日逆算フェーズ判定の真価
-              </li>
-              <li className="flex items-start gap-2">
-                <Check aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-jigen-gold" />
-                通学型の最大1/29の価格
-              </li>
-            </ul>
-            <CheckoutButton plan="yearly" />
-          </article>
+      {/* 現在の有効プラン一覧 */}
+      {hasAnyActive ? (
+        <section className="mb-6 space-y-3">
+          {licenses.map((l, i) => (
+            <article key={i} className="rounded-2xl border border-jigen-gold/30 bg-panel-gradient p-5 shadow-panel">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-jigen-ink-mute">買い切りプラン</p>
+              <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                <p className="text-lg font-bold text-jigen-ink">{licensePlanLabel(l.plan_type)}</p>
+                <span className="rounded-full bg-jigen-gold/15 px-3 py-0.5 text-xs font-semibold text-jigen-gold">有効</span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-jigen-ink">
+                <span className="inline-flex items-center gap-1">
+                  <Calendar aria-hidden className="h-3.5 w-3.5 text-jigen-gold" />
+                  有効期限: <span className="font-bold">{fmt(l.valid_until)}</span>
+                </span>
+                <span>購入額: <span className="font-bold text-jigen-gold">¥{l.paid_amount.toLocaleString()}</span></span>
+                <span>購入日: {fmt(l.paid_at)}</span>
+              </div>
+            </article>
+          ))}
+          {subActive && sub ? (
+            <article className="rounded-2xl border border-jigen-gold/30 bg-panel-gradient p-5 shadow-panel">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-jigen-ink-mute">サブスクリプション</p>
+              <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                <p className="text-lg font-bold text-jigen-ink">
+                  {sub.plan === 'yearly' ? '年額プラン' : '月額プラン'}
+                </p>
+                <span className={
+                  'rounded-full px-3 py-0.5 text-xs font-semibold ' +
+                  (status.tone === 'gold' ? 'bg-jigen-gold/15 text-jigen-gold' :
+                   status.tone === 'warn' ? 'bg-jigen-warning/15 text-jigen-warning' :
+                   'bg-jigen-bg-panel-2 text-jigen-ink-mute')
+                }>{status.label}</span>
+              </div>
+              {sub.status === 'trialing' && sub.trial_ends_at ? (
+                <p className="mt-3 text-xs text-jigen-ink">無料期間は <span className="font-semibold text-jigen-gold">{fmt(sub.trial_ends_at)}</span> まで</p>
+              ) : null}
+              {sub.current_period_end && sub.status !== 'trialing' ? (
+                <p className="mt-3 text-xs text-jigen-ink">次回更新日: <span className="font-semibold">{fmt(sub.current_period_end)}</span></p>
+              ) : null}
+              <div className="mt-4"><CancelButton /></div>
+            </article>
+          ) : null}
         </section>
       ) : null}
 
-      {/* リスク低減バッジ(β契約者には「7日間完全無料」 を非表示) */}
-      <section className="mb-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 rounded-xl border border-jigen-gold/30 bg-jigen-bg-panel p-4 text-[12px] font-medium text-jigen-ink">
-        {beta ? (
-          <span className="inline-flex items-center gap-1.5">
-            <ShieldCheck aria-hidden className="h-3.5 w-3.5 text-jigen-gold" />
-            β限定価格 ¥980/月
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1.5">
-            <ShieldCheck aria-hidden className="h-3.5 w-3.5 text-jigen-gold" />
-            7日間完全無料
-          </span>
-        )}
-        <span className="inline-flex items-center gap-1.5">
-          <ShieldCheck aria-hidden className="h-3.5 w-3.5 text-jigen-gold" />
-          いつでも解約可
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <ShieldCheck aria-hidden className="h-3.5 w-3.5 text-jigen-gold" />
-          電話勧誘ゼロ
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <ShieldCheck aria-hidden className="h-3.5 w-3.5 text-jigen-gold" />
-          Stripe決済(PCI DSS準拠)
-        </span>
-      </section>
-
-      {/* 解約セクション */}
-      {active ? (
-        <section className="mb-6 rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-5">
-          <p className="text-sm font-bold text-jigen-ink">解約について</p>
-          {beta ? (
-            <p className="mt-2 text-xs leading-relaxed text-jigen-ink">
-              解約しても、 次回更新日まではすべての機能をご利用いただけます。
-              <br />
-              β完走特典(永久¥1,490ロック)は3ヶ月完走者のみ対象となります。
-            </p>
-          ) : (
-            <p className="mt-2 text-xs leading-relaxed text-jigen-ink">
-              解約しても、 次回更新日まではすべての機能をご利用いただけます。
-              <br />
-              無料トライアル期間中の解約なら、 一切の課金は発生しません。
-            </p>
-          )}
+      {/* β1次を持ってる人向け β2次アップグレード提案 */}
+      {hasBetaFirst && !hasBetaSecond ? (
+        <section className="mb-6 rounded-2xl border-2 border-jigen-gold bg-panel-gradient p-6 shadow-gold-glow">
+          <p className="text-[10px] uppercase tracking-[0.25em] text-jigen-gold">β1次プラン購入者特典</p>
+          <h2 className="mt-2 text-xl font-extrabold tracking-tight">β2次プランを ¥980で(通常¥1,480)</h2>
+          <p className="mt-2 text-sm text-jigen-ink">2次試験(2026/10/19)までの完全サポート。 経験記述AI添削も付属(完成次第)。</p>
           <div className="mt-4">
-            <CancelButton />
+            <CheckoutButton plan="beta_second_upgrade" label="β2次プランに進む(¥980)" />
           </div>
         </section>
       ) : null}
 
-      {/* ナビ */}
+      {/* プラン選択(有効プラン無しの場合のみ) */}
+      {!hasAnyActive ? (
+        <>
+          <section className="mb-3 rounded-xl border border-jigen-warning/40 bg-jigen-warning-soft/10 p-4">
+            <p className="text-sm font-bold text-jigen-warning">直前駆け込み層向け β枠 残席あり</p>
+            <p className="mt-1 text-xs text-jigen-ink">¥980 一括で 2026/07/20 まで使い放題。 サブスク不要。</p>
+          </section>
+
+          <section className="mb-6 grid gap-4 sm:grid-cols-2">
+            <article className="rounded-2xl border-2 border-jigen-warning bg-panel-gradient p-6 shadow-[0_0_20px_rgba(239,68,68,0.25)]">
+              <span className="inline-block rounded-full bg-jigen-warning/15 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-jigen-warning">β限定 / 1次</span>
+              <p className="mt-2 text-4xl font-extrabold tabular-nums">¥980<span className="ml-1 text-sm font-normal text-jigen-ink">一括</span></p>
+              <p className="mt-1 text-xs text-jigen-ink">2026/07/20まで使い放題</p>
+              <ul className="mb-5 mt-4 space-y-1.5 text-xs text-jigen-ink">
+                <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />1次対策の全機能アクセス</li>
+                <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />初回50問模試 + 直前模試(7/1〜)</li>
+                <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />無料期間なし・即日開始</li>
+              </ul>
+              <CheckoutButton plan="beta_first" label="β1次プランを購入(¥980)" />
+            </article>
+
+            <article className="rounded-2xl border border-jigen-border-soft bg-jigen-bg-panel p-6">
+              <span className="inline-block rounded-full bg-jigen-bg-panel-2 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-jigen-ink-mute">β限定 / 2次</span>
+              <p className="mt-2 text-4xl font-extrabold tabular-nums">¥1,480<span className="ml-1 text-sm font-normal text-jigen-ink">一括</span></p>
+              <p className="mt-1 text-xs text-jigen-ink">2026/10/19まで使い放題</p>
+              <ul className="mb-5 mt-4 space-y-1.5 text-xs text-jigen-ink">
+                <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />1次 + 2次 両方の全機能</li>
+                <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />経験記述AI添削(完成次第)</li>
+                <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />β1次プラン購入者は ¥980で利用可</li>
+              </ul>
+              <CheckoutButton plan="beta_second_new" label="β2次プランを購入(¥1,480)" />
+            </article>
+          </section>
+
+          {/* 通常サブスクは折りたたんで控えめに */}
+          <details className="mb-6 rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-5">
+            <summary className="cursor-pointer text-sm font-semibold text-jigen-ink">サブスクリプション(月額/年額)で続けたい方</summary>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-jigen-border-soft bg-jigen-bg-dark p-4">
+                <p className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">月額</p>
+                <p className="mt-1 text-2xl font-bold">¥2,980<span className="text-xs font-normal text-jigen-ink">/月</span></p>
+                <p className="mb-3 text-[11px] text-jigen-ink">7日間無料・期間内解約で課金なし</p>
+                <CheckoutButton plan="monthly" label="月額で始める" />
+              </div>
+              <div className="rounded-lg border border-jigen-gold/40 bg-jigen-bg-dark p-4">
+                <p className="text-[10px] uppercase tracking-widest text-jigen-gold">年額(30%お得)</p>
+                <p className="mt-1 text-2xl font-bold">¥24,800<span className="text-xs font-normal text-jigen-ink">/年</span></p>
+                <p className="mb-3 text-[11px] text-jigen-ink">7日間無料・月換算¥2,067</p>
+                <CheckoutButton plan="yearly" label="年額で始める" />
+              </div>
+            </div>
+          </details>
+        </>
+      ) : null}
+
+      {/* リスク低減バッジ */}
+      <section className="mb-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 rounded-xl border border-jigen-gold/30 bg-jigen-bg-panel p-4 text-[12px] font-medium text-jigen-ink">
+        <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-jigen-gold" />Stripe決済(PCI DSS準拠)</span>
+        <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-jigen-gold" />電話勧誘ゼロ</span>
+        <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-jigen-gold" />即日学習スタート</span>
+      </section>
+
       <section className="flex flex-col items-center gap-2 pt-2 text-center">
-        <Link
-          href="/home"
-          className="inline-flex h-11 items-center justify-center rounded-xl border border-jigen-gold/40 bg-jigen-bg-panel px-4 text-sm font-semibold text-jigen-ink shadow-panel hover:border-jigen-gold hover:bg-jigen-bg-panel-2 hover:text-jigen-gold"
-        >
-          <Sparkles aria-hidden className="mr-1 h-4 w-4" />
-          ホームへ戻る
+        <Link href="/home" className="inline-flex h-11 items-center justify-center rounded-xl border border-jigen-gold/40 bg-jigen-bg-panel px-4 text-sm font-semibold text-jigen-ink hover:border-jigen-gold hover:bg-jigen-bg-panel-2">
+          <Sparkles className="mr-1 h-4 w-4" />ホームへ戻る
         </Link>
       </section>
     </main>
