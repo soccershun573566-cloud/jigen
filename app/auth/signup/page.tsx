@@ -92,10 +92,10 @@ function SignupForm() {
                 30名限定 β枠
               </span>
               <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground md:text-3xl">
-                β枠に申し込む
+                β1次プランに申し込む
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                ¥980/月で<span className="font-semibold text-foreground">即日学習スタート</span>。
+                ¥980 買い切りで<span className="font-semibold text-foreground">2026/07/20まで使い放題</span>。
                 登録後すぐStripe決済画面に進みます。
               </p>
             </>
@@ -175,8 +175,8 @@ function SignupForm() {
             aria-label={isBeta ? 'β枠に申し込む' : 'メールアドレスで新規登録'}
           >
             {loading
-              ? (isBeta ? '登録中...' : '登録中...')
-              : (isBeta ? '登録して決済画面へ進む(¥980/月)' : '始める')}
+              ? '登録中...'
+              : (isBeta ? '登録して決済画面へ進む(¥980 一括)' : '始める')}
           </Button>
         </form>
 
