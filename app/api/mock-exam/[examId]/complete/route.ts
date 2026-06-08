@@ -70,7 +70,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ examId: string
       if (isCorrect) sectionScores[q.section].correct++;
 
       // attempts テーブルに記録(AI出題エンジン反映)
+      // source は 'mock_' + examId のスラッグ化(例: mock_initial-50 / mock_pre-exam-2026-07)
       if (userAns !== undefined) {
+        const sourceLabel = `mock_${examId}`;
         await db.execute(sql`
           insert into attempts (user_id, question_id, user_answer, is_correct, response_seconds, source, attempted_at)
           values (
@@ -79,7 +81,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ examId: string
             ${JSON.stringify({ value: userAns })}::jsonb,
             ${isCorrect},
             0,
-            'mock_initial',
+            ${sourceLabel},
             now()
           )
         `);

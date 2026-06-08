@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { ArrowRight, Brain, Check, Clock, Sparkles } from 'lucide-react';
 import { sql } from 'drizzle-orm';
 import { getHomeV2 } from '@/lib/mock/dashboard-data';
@@ -15,6 +16,17 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const TODAY_TARGET = 25; // 1日のデフォルト目標問題数(後で users 設定から取得)
+
+async function isOnboarded(userId: string): Promise<boolean> {
+  try {
+    const r = await db.execute(sql`select onboarded_at from users where id = ${userId} limit 1`);
+    const rows = (r as unknown as { rows?: Array<{ onboarded_at: string | null }> }).rows
+      ?? (r as unknown as Array<{ onboarded_at: string | null }>);
+    return !!rows?.[0]?.onboarded_at;
+  } catch {
+    return false;
+  }
+}
 
 type InitialMockStatus = 'unstarted' | 'in_progress' | 'completed';
 async function getInitialMockStatus(userId: string): Promise<{ status: InitialMockStatus; score?: number; total?: number }> {
@@ -60,6 +72,12 @@ async function getTodaySolved(userId: string): Promise<number> {
 export default async function HomePage() {
   const mock = getHomeV2();
   const user = await getCurrentUser();
+
+  // オンボーディング未完了なら、 初回質問へ強制リダイレクト
+  if (user && !(await isOnboarded(user.id))) {
+    redirect('/onboarding');
+  }
+
   const todaySolved = user ? await getTodaySolved(user.id) : 0;
   const progressPct = TODAY_TARGET > 0 ? Math.min(100, Math.round((todaySolved / TODAY_TARGET) * 100)) : 0;
   const initialMock = user ? await getInitialMockStatus(user.id) : { status: 'unstarted' as const };

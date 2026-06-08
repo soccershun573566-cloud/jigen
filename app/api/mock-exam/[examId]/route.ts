@@ -14,15 +14,32 @@ export async function GET(_req: Request, ctx: { params: Promise<{ examId: string
     const user = await requireUser();
     const { examId } = await ctx.params;
 
-    // 模試情報
+    // 模試情報 + 期間チェック
     const examResult = await db.execute(sql`
-      select id, title, description, questions_count, is_active, one_time
+      select id, title, description, questions_count, is_active, one_time,
+             available_from, available_until,
+             (available_from is null or now() >= available_from) as is_started,
+             (available_until is null or now() <= available_until) as is_open
       from mock_exams where id = ${examId} and is_active = true limit 1
     `);
     const examRows = (examResult as { rows?: unknown[] }).rows ?? (examResult as unknown[]);
-    const exam = examRows[0] as { id: string; title: string; description: string; questions_count: number; one_time: boolean } | undefined;
+    const exam = examRows[0] as {
+      id: string; title: string; description: string; questions_count: number; one_time: boolean;
+      available_from: string | null; available_until: string | null;
+      is_started: boolean; is_open: boolean;
+    } | undefined;
     if (!exam) {
       return NextResponse.json({ error: { code: 'exam_not_found', message: '模試が見つかりません' } }, { status: 404 });
+    }
+    if (!exam.is_started) {
+      return NextResponse.json({
+        error: { code: 'not_yet_open', message: 'この模試はまだ開始されていません', available_from: exam.available_from }
+      }, { status: 403 });
+    }
+    if (!exam.is_open) {
+      return NextResponse.json({
+        error: { code: 'already_closed', message: 'この模試の受付は終了しました', available_until: exam.available_until }
+      }, { status: 403 });
     }
 
     // 全問題(順序付き)
