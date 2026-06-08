@@ -39,12 +39,11 @@ const TABS: Tab[] = [
     match: (p) => p.startsWith('/mastery'),
   },
   {
-    // 模試は別途実装予定。CEO方針: 演習はホーム「今日の問題」からのみ導入する。
-    // 当面は「準備中」プレースホルダ画面に飛ばす。
-    href: '/coming-soon/mock-exam',
+    // 模試一覧ページ(初回50問模試 + 期間限定の直前模試)
+    href: '/mock-exam',
     label: '模試',
     Icon: ClipboardCheck,
-    match: (p) => p.startsWith('/coming-soon/mock-exam'),
+    match: (p) => p.startsWith('/mock-exam') || p.startsWith('/coming-soon/mock-exam'),
   },
   {
     href: '/settings',

@@ -42,6 +42,52 @@ async function isOnboarded(userId: string): Promise<boolean> {
   }
 }
 
+// 期間限定の特別模試(初回模試以外)を1件取得
+type SpecialMockRow = {
+  id: string;
+  title: string;
+  description: string | null;
+  questions_count: number;
+  available_from: string | null;
+  available_until: string | null;
+  status: 'open' | 'upcoming' | 'closed';
+  days_to_open: number;
+  attempt_status: 'unstarted' | 'in_progress' | 'completed';
+};
+async function getSpecialMock(userId: string): Promise<SpecialMockRow | null> {
+  try {
+    const r = await db.execute(sql`
+      with exams as (
+        select id, title, description, questions_count, available_from, available_until,
+               case
+                 when (available_from is null or now() >= available_from)
+                  and (available_until is null or now() <= available_until) then 'open'
+                 when available_from is not null and now() < available_from then 'upcoming'
+                 else 'closed'
+               end as status,
+               case when available_from is not null
+                    then ceil(extract(epoch from (available_from - now())) / 86400)::int
+                    else 0 end as days_to_open
+        from mock_exams
+        where is_active = true and id != 'initial-50'
+      )
+      select e.*,
+             case when ma.completed_at is not null then 'completed'
+                  when ma.id is not null then 'in_progress'
+                  else 'unstarted' end as attempt_status
+      from exams e
+      left join mock_attempts ma on ma.mock_exam_id = e.id and ma.user_id = ${userId}::uuid
+      where e.status in ('open', 'upcoming')
+      order by case e.status when 'open' then 0 else 1 end, e.available_from nulls last
+      limit 1
+    `);
+    const rows = (r as unknown as { rows?: SpecialMockRow[] }).rows ?? (r as unknown as SpecialMockRow[]);
+    return rows?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 type InitialMockStatus = 'unstarted' | 'in_progress' | 'completed';
 async function getInitialMockStatus(userId: string): Promise<{ status: InitialMockStatus; score?: number; total?: number }> {
   try {
@@ -96,6 +142,7 @@ export default async function HomePage() {
   const todaySolved = user ? await getTodaySolved(user.id) : 0;
   const progressPct = todayTarget > 0 ? Math.min(100, Math.round((todaySolved / todayTarget) * 100)) : 0;
   const initialMock = user ? await getInitialMockStatus(user.id) : { status: 'unstarted' as const };
+  const specialMock = user ? await getSpecialMock(user.id) : null;
 
   const data = {
     ...mock,
@@ -158,8 +205,51 @@ export default async function HomePage() {
       {/* 今日の問題(メイン) */}
       <TodayQuestionCard today={data.today} />
 
-      {/* 月末模試(期間中のみ) */}
-      {data.examMock.active ? <ExamMockCard examMock={data.examMock} /> : null}
+      {/* 特別模試バナー(DB連動・期間判定) */}
+      {specialMock && specialMock.attempt_status !== 'completed' ? (
+        specialMock.status === 'open' ? (
+          <Link
+            href={`/mock-exam/${specialMock.id}`}
+            className="group mb-3 block overflow-hidden rounded-2xl border-2 border-jigen-warning bg-gradient-to-br from-red-900/40 via-jigen-bg-panel to-jigen-bg-panel p-5 shadow-[0_0_20px_rgba(239,68,68,0.25)] transition-transform hover:scale-[1.01]"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-jigen-warning/20 text-jigen-warning">
+                <span className="text-xl">🔥</span>
+              </div>
+              <div className="flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-jigen-warning">
+                  期間限定 開催中
+                </p>
+                <p className="text-base font-bold text-jigen-ink sm:text-lg">
+                  {specialMock.title}
+                </p>
+                <p className="mt-1 text-xs text-jigen-ink-soft">
+                  {specialMock.attempt_status === 'in_progress' ? '進捗は保存されています。続きから再開できます。' : '本番形式・50問・約60分'}
+                </p>
+              </div>
+              <ArrowRight aria-hidden className="h-5 w-5 shrink-0 text-jigen-warning transition-transform group-hover:translate-x-1" />
+            </div>
+          </Link>
+        ) : specialMock.status === 'upcoming' ? (
+          <Link
+            href="/mock-exam"
+            className="mb-3 block rounded-2xl border border-jigen-warning/40 bg-jigen-bg-panel/80 p-4 transition-colors hover:border-jigen-warning"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-jigen-warning/15 text-jigen-warning">
+                <Clock aria-hidden className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
+                <p className="text-[10px] uppercase tracking-widest text-jigen-warning">開催予告</p>
+                <p className="text-sm font-bold text-jigen-ink">
+                  {specialMock.title} まで <span className="text-jigen-warning">{specialMock.days_to_open}日</span>
+                </p>
+              </div>
+              <ArrowRight aria-hidden className="h-4 w-4 shrink-0 text-jigen-warning" />
+            </div>
+          </Link>
+        ) : null
+      ) : null}
 
       {/* 3カラム: 現在判定 / 現在地 / 継続日数 */}
       <StatTriple
