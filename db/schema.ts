@@ -117,6 +117,44 @@ export const attempts = pgTable('attempts', {
   source: text('source').notNull().default('daily'),
 });
 
+// ============ mock_exams (模試) ============
+export const mockExams = pgTable('mock_exams', {
+  id: text('id').primaryKey(), // 'initial-50', 'pre-exam-2026-07' 等
+  title: text('title').notNull(),
+  description: text('description'),
+  questionsCount: integer('questions_count').notNull(),
+  availableFrom: timestamp('available_from', { withTimezone: true }),
+  availableUntil: timestamp('available_until', { withTimezone: true }),
+  isActive: boolean('is_active').notNull().default(true),
+  oneTime: boolean('one_time').notNull().default(true), // 1度限り受験
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 模試と問題の関連 (順序付き)
+export const mockExamQuestions = pgTable('mock_exam_questions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  mockExamId: text('mock_exam_id').notNull().references(() => mockExams.id, { onDelete: 'cascade' }),
+  questionId: uuid('question_id').notNull().references(() => questions.id, { onDelete: 'cascade' }),
+  orderIndex: integer('order_index').notNull(),
+}, (t) => ({
+  examOrderUnique: uniqueIndex('mock_exam_questions_unique').on(t.mockExamId, t.orderIndex),
+}));
+
+// ユーザーの模試受験記録
+export const mockAttempts = pgTable('mock_attempts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  mockExamId: text('mock_exam_id').notNull().references(() => mockExams.id, { onDelete: 'cascade' }),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  currentQuestionIndex: integer('current_question_index').notNull().default(0),
+  answers: jsonb('answers').notNull().default({}), // {q_number: answer_value}
+  score: integer('score'), // 正答数
+  sectionScores: jsonb('section_scores'), // {建築学一般: 12, 施工管理法: 25, 法規: 7}
+}, (t) => ({
+  userExamUnique: uniqueIndex('mock_attempts_user_exam_unique').on(t.userId, t.mockExamId),
+}));
+
 // ============ mastery_profiles ============
 export const masteryProfiles = pgTable('mastery_profiles', {
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
