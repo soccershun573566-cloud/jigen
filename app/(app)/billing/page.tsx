@@ -17,6 +17,7 @@ export const revalidate = 0;
 
 type SubRow = {
   plan: 'monthly' | 'yearly' | 'free';
+  plan_label: string | null;
   status: 'trialing' | 'active' | 'past_due' | 'canceled' | 'free';
   trial_ends_at: string | null;
   current_period_end: string | null;
@@ -26,7 +27,7 @@ type SubRow = {
 async function getSubscription(userId: string): Promise<SubRow | null> {
   try {
     const r = await db.execute(sql`
-      select plan, status, trial_ends_at, current_period_end, canceled_at
+      select plan, plan_label, status, trial_ends_at, current_period_end, canceled_at
       from subscriptions where user_id = ${userId}::uuid limit 1
     `);
     const rows = (r as unknown as { rows?: SubRow[] }).rows ?? (r as unknown as SubRow[]);
@@ -36,10 +37,16 @@ async function getSubscription(userId: string): Promise<SubRow | null> {
   }
 }
 
-function planLabel(plan: string): string {
-  if (plan === 'monthly') return '月額プラン';
-  if (plan === 'yearly') return '年額プラン';
+function planLabel(sub: { plan: string; plan_label?: string | null }): string {
+  const label = sub.plan_label ?? sub.plan;
+  if (label === 'beta') return 'β限定プラン';
+  if (label === 'monthly') return '月額プラン';
+  if (label === 'yearly') return '年額プラン';
   return 'フリープラン';
+}
+
+function isBeta(sub: { plan_label?: string | null }): boolean {
+  return sub?.plan_label === 'beta';
 }
 
 function statusLabel(s: string): { label: string; tone: 'gold' | 'warn' | 'mute' } {
@@ -66,6 +73,7 @@ export default async function BillingPage() {
   const sub = await getSubscription(user.id);
   const active = sub && ['trialing', 'active', 'past_due'].includes(sub.status);
   const status = statusLabel(sub?.status ?? 'free');
+  const beta = sub ? isBeta(sub) : false;
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-6 text-jigen-ink">
@@ -86,7 +94,7 @@ export default async function BillingPage() {
         </p>
         <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <p className="text-lg font-bold text-jigen-ink">
-            {planLabel(sub?.plan ?? 'free')}
+            {planLabel({ plan: sub?.plan ?? 'free', plan_label: sub?.plan_label ?? null })}
           </p>
           <span
             className={
@@ -176,12 +184,19 @@ export default async function BillingPage() {
         </section>
       ) : null}
 
-      {/* リスク低減バッジ */}
+      {/* リスク低減バッジ(β契約者には「7日間完全無料」 を非表示) */}
       <section className="mb-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 rounded-xl border border-jigen-gold/30 bg-jigen-bg-panel p-4 text-[12px] font-medium text-jigen-ink">
-        <span className="inline-flex items-center gap-1.5">
-          <ShieldCheck aria-hidden className="h-3.5 w-3.5 text-jigen-gold" />
-          7日間完全無料
-        </span>
+        {beta ? (
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldCheck aria-hidden className="h-3.5 w-3.5 text-jigen-gold" />
+            β限定価格 ¥980/月
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldCheck aria-hidden className="h-3.5 w-3.5 text-jigen-gold" />
+            7日間完全無料
+          </span>
+        )}
         <span className="inline-flex items-center gap-1.5">
           <ShieldCheck aria-hidden className="h-3.5 w-3.5 text-jigen-gold" />
           いつでも解約可
@@ -200,11 +215,19 @@ export default async function BillingPage() {
       {active ? (
         <section className="mb-6 rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-5">
           <p className="text-sm font-bold text-jigen-ink">解約について</p>
-          <p className="mt-2 text-xs leading-relaxed text-jigen-ink">
-            解約しても、 次回更新日まではすべての機能をご利用いただけます。
-            <br />
-            無料トライアル期間中の解約なら、 一切の課金は発生しません。
-          </p>
+          {beta ? (
+            <p className="mt-2 text-xs leading-relaxed text-jigen-ink">
+              解約しても、 次回更新日まではすべての機能をご利用いただけます。
+              <br />
+              β完走特典(永久¥1,490ロック)は3ヶ月完走者のみ対象となります。
+            </p>
+          ) : (
+            <p className="mt-2 text-xs leading-relaxed text-jigen-ink">
+              解約しても、 次回更新日まではすべての機能をご利用いただけます。
+              <br />
+              無料トライアル期間中の解約なら、 一切の課金は発生しません。
+            </p>
+          )}
           <div className="mt-4">
             <CancelButton />
           </div>

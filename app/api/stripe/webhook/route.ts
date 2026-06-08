@@ -80,6 +80,9 @@ async function upsertSubscription(sub: StripeSubscriptionLite): Promise<void> {
   }
   const interval = sub.items.data[0]?.price.recurring?.interval;
   const plan = mapPlanFromInterval(interval);
+  // metadata.plan に保存された 'beta' | 'monthly' | 'yearly' をそのまま label に
+  // metadata がない既存契約者は interval から推定した plan を label に
+  const planLabel = sub.metadata?.plan ?? plan;
   const status = mapStatus(sub.status);
   const trialEndsAt = sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null;
   const currentPeriodEnd = sub.current_period_end
@@ -87,11 +90,12 @@ async function upsertSubscription(sub: StripeSubscriptionLite): Promise<void> {
     : null;
 
   await db.execute(sql`
-    insert into subscriptions (user_id, stripe_subscription_id, plan, status, trial_ends_at, current_period_end, created_at, updated_at)
+    insert into subscriptions (user_id, stripe_subscription_id, plan, plan_label, status, trial_ends_at, current_period_end, created_at, updated_at)
     values (
       ${userId}::uuid,
       ${sub.id},
       ${plan}::plan_type,
+      ${planLabel},
       ${status}::subscription_status,
       ${trialEndsAt}::timestamptz,
       ${currentPeriodEnd}::timestamptz,
@@ -101,6 +105,7 @@ async function upsertSubscription(sub: StripeSubscriptionLite): Promise<void> {
     on conflict (user_id) do update set
       stripe_subscription_id = excluded.stripe_subscription_id,
       plan = excluded.plan,
+      plan_label = excluded.plan_label,
       status = excluded.status,
       trial_ends_at = excluded.trial_ends_at,
       current_period_end = excluded.current_period_end,
