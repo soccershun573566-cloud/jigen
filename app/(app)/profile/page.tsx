@@ -27,6 +27,7 @@ import { getCurrentUser } from '@/lib/auth/session';
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
 import { NicknameEditor } from '@/components/profile/NicknameEditor';
 import { AvatarEditor } from '@/components/profile/AvatarEditor';
+import { PreferencesEditor } from '@/components/profile/PreferencesEditor';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -385,13 +386,16 @@ export default async function ProfilePage() {
         <h1 className="text-2xl font-extrabold tracking-wide text-jigen-ink drop-shadow-[0_0_8px_rgba(245,196,65,0.25)]">
           プロフィール
         </h1>
-        <Link
-          href="/settings"
-          className="ml-auto rounded-md p-2 text-jigen-ink-soft hover:bg-jigen-bg-panel-2 hover:text-jigen-gold"
-          aria-label="設定"
-        >
-          <Sparkles aria-hidden className="h-5 w-5" />
-        </Link>
+        <div className="ml-auto flex items-center gap-2">
+          <PreferencesEditor />
+          <Link
+            href="/settings"
+            className="rounded-md p-2 text-jigen-ink-soft hover:bg-jigen-bg-panel-2 hover:text-jigen-gold"
+            aria-label="設定"
+          >
+            <Sparkles aria-hidden className="h-5 w-5" />
+          </Link>
+        </div>
       </div>
 
       {/* ユーザー + 試験日 */}

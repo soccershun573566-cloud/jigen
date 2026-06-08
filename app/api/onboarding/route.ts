@@ -12,10 +12,10 @@ import { db } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 const Request = z.object({
-  targetExamDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   attemptHistory: z.enum(['first', 'failed_once', 'failed_multi']),
   weekdayMinutes: z.number().int().min(5).max(240),
   weekendMinutes: z.number().int().min(5).max(480),
+  dailyTargetQuestions: z.number().int().min(1).max(500),
   studyStyle: z.enum(['self', 'cram_school', 'online']),
   strongSections: z.array(z.string()),
   weakSection: z.string(),
@@ -34,10 +34,10 @@ export async function POST(req: Request) {
 
     await db.execute(sql`
       update users set
-        target_exam_date = ${d.targetExamDate}::date,
         attempt_history = ${d.attemptHistory},
         weekday_minutes = ${d.weekdayMinutes},
         weekend_minutes = ${d.weekendMinutes},
+        daily_target_questions = ${d.dailyTargetQuestions},
         study_style = ${d.studyStyle},
         strong_sections = ${JSON.stringify(d.strongSections)}::jsonb,
         weak_section = ${d.weakSection},

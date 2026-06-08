@@ -10,10 +10,10 @@ import { TiranoSensei } from '@/components/mascot/TiranoSensei';
 import { cn } from '@/lib/utils';
 
 type Form = {
-  targetExamDate: string;
   attemptHistory: 'first' | 'failed_once' | 'failed_multi' | '';
   weekdayMinutes: number;
   weekendMinutes: number;
+  dailyTargetQuestions: number;
   studyStyle: 'self' | 'cram_school' | 'online' | '';
   strongSections: string[];
   weakSection: string;
@@ -34,6 +34,12 @@ const WEEKEND_OPTIONS = [
   { v: 120, label: '2時間' },
   { v: 240, label: '4時間以上' },
 ];
+const TARGET_OPTIONS = [
+  { v: 10, label: '10問', desc: 'スキマ時間で軽く' },
+  { v: 25, label: '25問', desc: '標準ペース(おすすめ)' },
+  { v: 50, label: '50問', desc: 'がっつり詰める' },
+  { v: 100, label: '100問', desc: '直前駆け込み層' },
+];
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -41,10 +47,10 @@ export default function OnboardingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [form, setForm] = useState<Form>({
-    targetExamDate: '2026-07-19',
     attemptHistory: '',
     weekdayMinutes: 30,
     weekendMinutes: 60,
+    dailyTargetQuestions: 25,
     studyStyle: '',
     strongSections: [],
     weakSection: '',
@@ -53,12 +59,6 @@ export default function OnboardingPage() {
   });
 
   const steps = [
-    {
-      key: 'examDate',
-      title: '試験日はいつですか?',
-      sub: '残り日数の表示と、AIの学習プラン作成に使います',
-      valid: !!form.targetExamDate,
-    },
     {
       key: 'attempt',
       title: 'これまでの受験経験は?',
@@ -76,6 +76,12 @@ export default function OnboardingPage() {
       title: '週末に確保できる学習時間',
       sub: '休日のペースも教えてください',
       valid: !!form.weekendMinutes,
+    },
+    {
+      key: 'target',
+      title: '1日の目標問題数を選んでください',
+      sub: '後でプロフィールから変更できます',
+      valid: !!form.dailyTargetQuestions,
     },
     {
       key: 'style',
@@ -151,26 +157,7 @@ export default function OnboardingPage() {
         <h2 className="mb-2 text-xl font-extrabold tracking-tight text-jigen-ink">{current.title}</h2>
         <p className="mb-5 text-xs text-jigen-ink-soft">{current.sub}</p>
 
-        {/* Step 0: 試験日 */}
-        {current.key === 'examDate' && (
-          <div className="space-y-3">
-            <input
-              type="date"
-              value={form.targetExamDate}
-              onChange={(e) => setForm({ ...form, targetExamDate: e.target.value })}
-              className="w-full rounded-lg border border-jigen-border-soft bg-jigen-bg-panel px-4 py-3 text-base text-jigen-ink"
-            />
-            <button
-              type="button"
-              onClick={() => setForm({ ...form, targetExamDate: '2026-07-19' })}
-              className="rounded-md border border-jigen-gold/40 bg-jigen-bg-panel px-3 py-1.5 text-xs text-jigen-gold hover:bg-jigen-bg-panel-2"
-            >
-              📅 2026年7月19日(1次本番)
-            </button>
-          </div>
-        )}
-
-        {/* Step 1: 受験経験 */}
+        {/* Step 0: 受験経験 */}
         {current.key === 'attempt' && (
           <div className="grid gap-2">
             {([
@@ -232,6 +219,30 @@ export default function OnboardingPage() {
                 )}
               >
                 {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Step 3.5: 1日の目標問題数 */}
+        {current.key === 'target' && (
+          <div className="grid gap-2">
+            {TARGET_OPTIONS.map(opt => (
+              <button
+                key={opt.v}
+                type="button"
+                onClick={() => setForm({ ...form, dailyTargetQuestions: opt.v })}
+                className={cn(
+                  'rounded-lg border p-3 text-left',
+                  form.dailyTargetQuestions === opt.v
+                    ? 'border-jigen-gold bg-jigen-gold/10'
+                    : 'border-jigen-border-soft bg-jigen-bg-panel hover:border-jigen-gold/40',
+                )}
+              >
+                <div className="flex items-baseline justify-between">
+                  <span className={cn('text-base font-bold', form.dailyTargetQuestions === opt.v ? 'text-jigen-gold' : 'text-jigen-ink')}>{opt.label}</span>
+                  <span className="text-[11px] text-jigen-ink-soft">{opt.desc}</span>
+                </div>
               </button>
             ))}
           </div>
