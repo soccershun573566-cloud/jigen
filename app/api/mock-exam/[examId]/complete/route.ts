@@ -38,6 +38,32 @@ export async function POST(req: Request, ctx: { params: Promise<{ examId: string
     }
     const { answers } = parsed.data;
 
+    // 【冪等性ガード】 既に完了済みなら attempts 重複INSERT を防ぐため、 既存スコアを返して早期 return
+    // (ボタン連打・ネットワークリトライ・タブリロード時の二重送信対策)
+    const existing = await db.execute(sql`
+      select completed_at, score, section_scores
+      from mock_attempts
+      where user_id = ${user.id}::uuid and mock_exam_id = ${examId}
+      limit 1
+    `);
+    const existingRows = ((existing as { rows?: Array<{ completed_at: string | null; score: number | null; section_scores: unknown }> }).rows
+      ?? (existing as unknown as Array<{ completed_at: string | null; score: number | null; section_scores: unknown }>));
+    const prior = existingRows?.[0];
+    if (prior?.completed_at) {
+      // 既存の集計結果を返却(attempts 重複INSERT は行わない)
+      const qCountResult = await db.execute(sql`
+        select count(*)::int as c from mock_exam_questions where mock_exam_id = ${examId}
+      `);
+      const qCountRows = ((qCountResult as { rows?: { c: number }[] }).rows ?? (qCountResult as unknown as { c: number }[]));
+      const totalQuestions = qCountRows?.[0]?.c ?? 50;
+      return NextResponse.json({
+        score: prior.score ?? 0,
+        total: totalQuestions,
+        sectionScores: (prior.section_scores ?? {}) as Record<string, { total: number; correct: number }>,
+        alreadyCompleted: true,
+      });
+    }
+
     // 模試の全問題と正解
     const qResult = await db.execute(sql`
       select q.id, q.section, q.answer, meq.order_index

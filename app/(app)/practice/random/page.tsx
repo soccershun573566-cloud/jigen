@@ -12,10 +12,10 @@ import { TiranoSensei } from '@/components/mascot/TiranoSensei';
 import { Button } from '@/components/ui/button';
 import { PracticeRunner, type RunnerQuestion } from '@/components/practice/PracticeRunner';
 import type { PracticeNextResponse } from '@/types/api';
+import { QUEUE_KEY } from '@/lib/practice/queue';
 
 type Phase = 'loading' | 'error' | 'ready';
 
-const QUEUE_KEY = 'jigen_question_queue_v1';
 const QUEUE_TARGET = 10; // 常にここまで先読みしておく(テンポ重視・2026-06-09 5→10に拡張)
 const QUEUE_PARALLEL = 3; // バックグラウンド補充時の同時 fetch 数(3並列)
 

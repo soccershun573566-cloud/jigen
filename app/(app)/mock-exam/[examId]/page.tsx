@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
 import { cn } from '@/lib/utils';
+import { clearPracticeQueue } from '@/lib/practice/queue';
 
 type ExamMeta = {
   id: string;
@@ -81,6 +82,8 @@ export default function MockExamPage() {
               total: d.exam.questions_count,
               sectionScores: d.attempt.section_scores,
             });
+            // 完了済の模試を再表示する流入時もキューをクリア(念のため)
+            clearPracticeQueue();
             setPhase('result');
             return;
           }
@@ -158,6 +161,9 @@ export default function MockExamPage() {
       }
       const result = (await res.json()) as { score: number; total: number; sectionScores: Record<string, SectionStats> };
       setCompleteResult(result);
+      // 模試完了 → 出題ロジックが変わるので、 古いキャッシュキューを破棄
+      // (注意点2の対策: 直後の「次の問題」 が古い出題ロジックで取られたものにならないように)
+      clearPracticeQueue();
       setPhase('result');
     } catch (e) {
       setErrorMsg((e as Error).message || '提出に失敗しました');

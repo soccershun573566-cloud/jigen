@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { ArrowRight, Brain, Calendar, Check, ChevronLeft, ChevronRight, Clock, Loader2, Target } from 'lucide-react';
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
 import { cn } from '@/lib/utils';
+import { clearPracticeQueue } from '@/lib/practice/queue';
 
 type Form = {
   attemptHistory: 'first' | 'failed_once' | 'failed_multi' | '';
@@ -123,6 +124,9 @@ export default function OnboardingPage() {
         const j = await res.json().catch(() => null);
         throw new Error(j?.error?.message ?? `HTTP ${res.status}`);
       }
+      // オンボーディング完了 → 出題ロジック(daily_target/強弱教科 等)が反映されるので
+      // 古いキャッシュキューをクリア
+      clearPracticeQueue();
       // 完了 → 初回模試へ
       router.push('/mock-exam/initial-50');
     } catch (e) {
