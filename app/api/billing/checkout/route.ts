@@ -33,6 +33,28 @@ export async function POST(req: Request) {
     }
     const plan = parsed.data.plan;
 
+    // 買い切りプランは重複購入禁止
+    if (plan === 'beta_first' || plan === 'beta_second_new' || plan === 'beta_second_upgrade') {
+      const targetTypes =
+        plan === 'beta_first' ? ['beta_first']
+        : ['beta_second_new', 'beta_second_upgrade']; // 2次は new/upgrade どちらかあれば重複扱い
+      const r = await db.execute(sql`
+        select plan_type, valid_until from licenses
+        where user_id = ${user.id}::uuid
+          and plan_type = any(${targetTypes}::text[])
+          and valid_until > now()
+        limit 1
+      `);
+      const rows = (r as unknown as { rows?: Array<{ plan_type: string; valid_until: string }> }).rows
+        ?? (r as unknown as Array<{ plan_type: string; valid_until: string }>);
+      if (rows && rows.length > 0) {
+        const planName = plan === 'beta_first' ? 'β1次プラン' : 'β2次プラン';
+        return NextResponse.json({
+          error: { code: 'already_purchased', message: `${planName}は既にご購入済みです(有効期限: ${rows[0].valid_until})` }
+        }, { status: 409 });
+      }
+    }
+
     // β2次アップグレードは β1次ライセンス保有者のみ
     if (plan === 'beta_second_upgrade') {
       const r = await db.execute(sql`
@@ -47,6 +69,23 @@ export async function POST(req: Request) {
         return NextResponse.json({
           error: { code: 'no_beta_first', message: 'β1次プランの購入履歴がありません。 新規の場合は ¥1,480 プランをご選択ください' }
         }, { status: 403 });
+      }
+    }
+
+    // サブスクは既存活性のものがあれば重複拒否
+    if (plan === 'monthly' || plan === 'yearly') {
+      const r = await db.execute(sql`
+        select status from subscriptions
+        where user_id = ${user.id}::uuid
+          and status in ('trialing', 'active', 'past_due')
+        limit 1
+      `);
+      const rows = (r as unknown as { rows?: Array<{ status: string }> }).rows
+        ?? (r as unknown as Array<{ status: string }>);
+      if (rows && rows.length > 0) {
+        return NextResponse.json({
+          error: { code: 'already_subscribed', message: '既に有効なサブスクリプションがあります。 解約後に再度お試しください' }
+        }, { status: 409 });
       }
     }
 
