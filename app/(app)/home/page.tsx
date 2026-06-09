@@ -17,28 +17,24 @@ export const revalidate = 0;
 
 const DEFAULT_TODAY_TARGET = 25; // フォールバック値(users.daily_target_questions が無い場合)
 
-async function getDailyTarget(userId: string): Promise<number> {
+// 旧: getDailyTarget と isOnboarded を別クエリで2回users取得 → DB往復2回
+// 新: 1本に統合 → DB往復1回(RTT 半分)
+async function getUserBasic(userId: string): Promise<{ onboarded: boolean; dailyTarget: number }> {
   try {
     const r = await db.execute(sql`
-      select daily_target_questions from users where id = ${userId} limit 1
+      select onboarded_at, daily_target_questions
+      from users where id = ${userId} limit 1
     `);
-    const rows = (r as unknown as { rows?: Array<{ daily_target_questions: number }> }).rows
-      ?? (r as unknown as Array<{ daily_target_questions: number }>);
-    const v = rows?.[0]?.daily_target_questions;
-    return typeof v === 'number' && v > 0 ? v : DEFAULT_TODAY_TARGET;
+    const rows = (r as unknown as { rows?: Array<{ onboarded_at: string | null; daily_target_questions: number | null }> }).rows
+      ?? (r as unknown as Array<{ onboarded_at: string | null; daily_target_questions: number | null }>);
+    const row = rows?.[0];
+    const v = row?.daily_target_questions;
+    return {
+      onboarded: !!row?.onboarded_at,
+      dailyTarget: typeof v === 'number' && v > 0 ? v : DEFAULT_TODAY_TARGET,
+    };
   } catch {
-    return DEFAULT_TODAY_TARGET;
-  }
-}
-
-async function isOnboarded(userId: string): Promise<boolean> {
-  try {
-    const r = await db.execute(sql`select onboarded_at from users where id = ${userId} limit 1`);
-    const rows = (r as unknown as { rows?: Array<{ onboarded_at: string | null }> }).rows
-      ?? (r as unknown as Array<{ onboarded_at: string | null }>);
-    return !!rows?.[0]?.onboarded_at;
-  } catch {
-    return false;
+    return { onboarded: false, dailyTarget: DEFAULT_TODAY_TARGET };
   }
 }
 
@@ -133,16 +129,29 @@ export default async function HomePage() {
   const mock = getHomeV2();
   const user = await getCurrentUser();
 
-  // オンボーディング未完了なら、 初回質問へ強制リダイレクト
-  if (user && !(await isOnboarded(user.id))) {
+  // 旧: 5本のSQLを逐次 await(RTTが5回分積み上がる)
+  // 新: 4本を並列(RTT 5 → RTT 1)。 さらに users 関連 2クエリを 1本に統合
+  const [basic, todaySolved, initialMock, specialMock] = user
+    ? await Promise.all([
+        getUserBasic(user.id),
+        getTodaySolved(user.id),
+        getInitialMockStatus(user.id),
+        getSpecialMock(user.id),
+      ])
+    : [
+        { onboarded: true, dailyTarget: DEFAULT_TODAY_TARGET },
+        0,
+        { status: 'unstarted' as const },
+        null,
+      ];
+
+  // オンボーディング未完了なら強制リダイレクト(ログインユーザーのみ)
+  if (user && !basic.onboarded) {
     redirect('/onboarding');
   }
 
-  const todayTarget = user ? await getDailyTarget(user.id) : DEFAULT_TODAY_TARGET;
-  const todaySolved = user ? await getTodaySolved(user.id) : 0;
+  const todayTarget = basic.dailyTarget;
   const progressPct = todayTarget > 0 ? Math.min(100, Math.round((todaySolved / todayTarget) * 100)) : 0;
-  const initialMock = user ? await getInitialMockStatus(user.id) : { status: 'unstarted' as const };
-  const specialMock = user ? await getSpecialMock(user.id) : null;
 
   const data = {
     ...mock,
