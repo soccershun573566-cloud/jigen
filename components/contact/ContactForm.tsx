@@ -138,7 +138,6 @@ export function ContactForm() {
           value={message}
           onChange={(e) => setMessage(e.target.value.slice(0, 5000))}
           required
-          minLength={5}
           rows={6}
           className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           placeholder="お問い合わせ内容をご記入ください..."
@@ -150,7 +149,7 @@ export function ContactForm() {
 
       <button
         type="submit"
-        disabled={submitting || message.trim().length < 5}
+        disabled={submitting || message.trim().length === 0 || email.trim().length === 0}
         className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary text-base font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
       >
         {submitting ? (

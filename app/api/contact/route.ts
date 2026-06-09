@@ -14,7 +14,7 @@ const ContactRequest = z.object({
   name: z.string().max(80).optional().nullable(),
   email: z.string().email().max(200),
   category: z.enum(['question', 'bug', 'request', 'billing', 'other']),
-  message: z.string().min(5).max(5000),
+  message: z.string().min(1).max(5000),
   // 認証ユーザーから送信されればここにメアド付与
   userId: z.string().optional().nullable(),
 });
