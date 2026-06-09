@@ -191,10 +191,10 @@ export default function MockExamPage() {
         <p className="mb-2 text-center text-[10px] uppercase tracking-[0.3em] text-jigen-gold">
           {isResume ? 'Resume' : 'Initial Diagnosis'}
         </p>
-        <h1 className="mb-3 text-center text-2xl font-extrabold tracking-tight text-jigen-ink">
+        <h1 className="mb-3 text-center text-2xl font-extrabold tracking-tight text-jigen-ink drop-shadow-[0_0_10px_rgba(245,196,65,0.25)]">
           {data.exam.title}
         </h1>
-        <p className="mb-6 text-center text-sm leading-relaxed text-jigen-ink-soft">
+        <p className="mb-6 text-center text-sm leading-relaxed text-jigen-ink [text-wrap:balance]">
           {data.exam.description}
         </p>
 
@@ -399,10 +399,10 @@ export default function MockExamPage() {
         <p className="mb-2 text-center text-[10px] uppercase tracking-[0.3em] text-jigen-gold">
           診断結果
         </p>
-        <h1 className="mb-2 text-center text-2xl font-extrabold tracking-tight">
+        <h1 className="mb-2 text-center text-2xl font-extrabold tracking-tight text-jigen-ink drop-shadow-[0_0_10px_rgba(245,196,65,0.25)]">
           現状把握模試 完了!
         </h1>
-        <p className="mb-6 text-center text-sm text-jigen-ink-soft">
+        <p className="mb-6 text-center text-sm text-jigen-ink">
           お疲れさまでした。 結果はあなただけが見られます。
         </p>
 
