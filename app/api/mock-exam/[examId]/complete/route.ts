@@ -13,6 +13,7 @@ import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
 import { db } from '@/lib/db';
+import { attempts } from '@/db/schema';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,9 +52,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ examId: string
       return NextResponse.json({ error: { code: 'no_questions', message: '模試の問題がありません' } }, { status: 404 });
     }
 
-    // 採点
+    // 採点 + attempts 用レコード収集(DB往復はループ外で1回だけ)
     let totalCorrect = 0;
     const sectionScores: Record<string, { total: number; correct: number }> = {};
+    const sourceLabel = `mock_${examId}`;
+    const attemptRows: Array<{
+      userId: string;
+      questionId: string;
+      userAnswer: { value: number };
+      isCorrect: boolean;
+      responseSeconds: number;
+      source: string;
+    }> = [];
 
     for (const q of qRows) {
       const idx = String(q.order_index);
@@ -69,35 +79,36 @@ export async function POST(req: Request, ctx: { params: Promise<{ examId: string
       sectionScores[q.section].total++;
       if (isCorrect) sectionScores[q.section].correct++;
 
-      // attempts テーブルに記録(AI出題エンジン反映)
-      // source は 'mock_' + examId のスラッグ化(例: mock_initial-50 / mock_pre-exam-2026-07)
+      // attempts 用レコードを配列に蓄積(あとで一括INSERT)
       if (userAns !== undefined) {
-        const sourceLabel = `mock_${examId}`;
-        await db.execute(sql`
-          insert into attempts (user_id, question_id, user_answer, is_correct, response_seconds, source, attempted_at)
-          values (
-            ${user.id}::uuid,
-            ${q.id}::uuid,
-            ${JSON.stringify({ value: userAns })}::jsonb,
-            ${isCorrect},
-            0,
-            ${sourceLabel},
-            now()
-          )
-        `);
+        attemptRows.push({
+          userId: user.id,
+          questionId: q.id,
+          userAnswer: { value: userAns },
+          isCorrect,
+          responseSeconds: 0,
+          source: sourceLabel,
+        });
       }
     }
 
-    // 完了マーク
-    await db.execute(sql`
-      update mock_attempts
-      set completed_at = now(),
-          answers = ${JSON.stringify(answers)}::jsonb,
-          score = ${totalCorrect},
-          section_scores = ${JSON.stringify(sectionScores)}::jsonb,
-          current_question_index = ${qRows.length}
-      where user_id = ${user.id}::uuid and mock_exam_id = ${examId}
-    `);
+    // 【大幅高速化】 旧: 50問 × 逐次 INSERT(RTT 50回)+ mock_attempts UPDATE(RTT 1回) = RTT 51回
+    //              新: 1本の bulk INSERT + UPDATE を Promise.all で並列実行(RTT 1回)
+    //              ※ drizzle の values([...]) で 1ステートメントに展開される
+    await Promise.all([
+      attemptRows.length > 0
+        ? db.insert(attempts).values(attemptRows)
+        : Promise.resolve(),
+      db.execute(sql`
+        update mock_attempts
+        set completed_at = now(),
+            answers = ${JSON.stringify(answers)}::jsonb,
+            score = ${totalCorrect},
+            section_scores = ${JSON.stringify(sectionScores)}::jsonb,
+            current_question_index = ${qRows.length}
+        where user_id = ${user.id}::uuid and mock_exam_id = ${examId}
+      `),
+    ]);
 
     return NextResponse.json({
       score: totalCorrect,
