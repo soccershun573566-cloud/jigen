@@ -17,13 +17,15 @@ export async function sendEmail(args: {
   subject: string;
   html: string;
   text?: string;
+  replyTo?: string;
 }): Promise<void> {
-  const from = process.env.RESEND_FROM_EMAIL ?? 'noreply@jigen.app';
+  const from = process.env.RESEND_FROM_EMAIL ?? 'noreply@jigen-app.com';
   await getResend().emails.send({
     from,
     to: args.to,
     subject: args.subject,
     html: args.html,
     text: args.text,
+    replyTo: args.replyTo,
   });
 }

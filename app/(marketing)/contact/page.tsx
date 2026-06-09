@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { MarketingFooter } from '@/components/marketing/MarketingFooter';
+import { ContactForm } from '@/components/contact/ContactForm';
 
-// お問い合わせ(現状はメール窓口のみ)
-// TODO(ナギ): MVP 後半でフォーム化(Resend 経由で受信)
+// お問い合わせ(2026-06-09 フォーム化完了)
+// Resend経由でsupport@jigen-app.com に届く + replyToでユーザーメアド設定
 
 export const dynamic = 'force-static';
 
@@ -33,14 +34,19 @@ export default function ContactPage() {
         </h1>
 
         <p className="mt-6 text-base leading-relaxed text-foreground/90">
-          サービスに関するご質問・不具合のご報告・ご要望は、
-          下記のメールアドレスまでご連絡ください。
+          サービスに関するご質問・不具合のご報告・ご要望は、 下記フォームからお送りください。
           通常2営業日以内に返信します(土日祝・年末年始を除く)。
         </p>
 
+        {/* お問い合わせフォーム */}
+        <div className="mt-8">
+          <ContactForm />
+        </div>
+
+        {/* メール直接 (フォーム使えない方向け) */}
         <section aria-labelledby="email-section" className="mt-10 rounded-lg border border-border bg-muted/30 p-6">
           <h2 id="email-section" className="text-sm font-medium text-muted-foreground">
-            メール窓口
+            フォームが使えない場合はメールで:
           </h2>
           <p className="mt-2 text-lg font-semibold text-foreground">
             <a
@@ -80,10 +86,6 @@ export default function ContactPage() {
             </li>
           </ul>
         </section>
-
-        <p className="mt-10 text-xs text-muted-foreground">
-          ※ お問い合わせフォームは準備中です。当面はメールにてご対応します。
-        </p>
       </article>
       <MarketingFooter />
     </main>

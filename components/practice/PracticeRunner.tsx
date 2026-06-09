@@ -16,6 +16,7 @@ import { Check, ChevronDown, ChevronUp, Home, Shuffle, Timer, Target, X } from '
 import { Button } from '@/components/ui/button';
 import { InterruptDialog } from '@/components/practice/InterruptDialog';
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
+import { ReportButton } from '@/components/practice/ReportButton';
 import { cn } from '@/lib/utils';
 import type { AttemptSubmitResponse } from '@/types/api';
 
@@ -546,6 +547,10 @@ export function PracticeRunner({
                 <p className="whitespace-pre-line">
                   {result.explanation || result.explanationMd}
                 </p>
+                {/* 問題通報ボタン(品質改善用) */}
+                <div className="mt-4 flex justify-end border-t border-jigen-border-soft pt-3">
+                  <ReportButton questionId={question.id} />
+                </div>
               </div>
             ) : null}
           </div>
