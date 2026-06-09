@@ -30,9 +30,11 @@ export const metadata: Metadata = {
     '2026年7月の1次試験まで直前駆け込み層を救う、AI伴走パートナー「ジゲン」のβ版。¥980 買い切りで 2026/07/20まで使い放題(サブスクなし)。30名限定。',
 };
 
-// 日付計算を毎リクエストで実行(毎日0:00 JSTでカウントダウン更新)
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+// 【高速化】 毎リクエストSSR → ISR (1時間キャッシュ・Vercel CDN ヒット)
+// 残り日数は「あとN日」 粒度なので 1時間遅延でも体感ゼロ。
+// 旧: 毎アクセスで Vercel Function 起動・SQL なくとも数百ms
+// 新: CDN edge から HTML 即配信(数十ms)
+export const revalidate = 3600;
 
 // 試験日と限定数(本番では env or DB)
 const EXAM_DATE = '2026-07-19';

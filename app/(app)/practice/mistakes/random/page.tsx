@@ -65,6 +65,18 @@ export default function PracticeMistakesRandomPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [question, setQuestion] = useState<RunnerQuestion | null>(null);
   const loadingRef = useRef(false);
+  // 【高速化】 1問先読み: 現在の問題を表示中に、 裏で次の1問を取得しておく
+  // → 「次の問題へ」 タップ時に RTT待ち時間ゼロ
+  const prefetchedRef = useRef<CachedQuestion | null>(null);
+
+  function startPrefetch() {
+    if (prefetchedRef.current) return; // 既にプリフェッチ済
+    fetchOne()
+      .then((q) => {
+        if (q) prefetchedRef.current = q;
+      })
+      .catch(() => { /* ignore */ });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +95,8 @@ export default function PracticeMistakesRandomPage() {
         }
         setQuestion(buildRunnerQuestion(next));
         setPhase('ready');
+        // 1問先読み開始
+        startPrefetch();
       } catch (e) {
         if (cancelled) return;
         setErrorMessage((e as Error).message || '読み込みに失敗しました');
@@ -98,9 +112,16 @@ export default function PracticeMistakesRandomPage() {
   }, [reloadKey]);
 
   async function handleNextInline() {
-    const next = await fetchOne();
+    // プリフェッチ済の問題があれば即座に表示(RTT待ちなし)
+    let next = prefetchedRef.current;
+    prefetchedRef.current = null;
+    if (!next) {
+      next = await fetchOne();
+    }
     if (next) {
       setQuestion(buildRunnerQuestion(next));
+      // 次のプリフェッチ開始
+      startPrefetch();
     } else {
       setQuestion(null);
       setPhase('done');

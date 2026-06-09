@@ -81,9 +81,10 @@ async function getWrongList(userId: string): Promise<Row[]> {
 }
 
 async function getSummary(userId: string): Promise<Summary> {
-  try {
-    // current_wrong: 間違えたことがある問題のうち、直近2回連続正解で解除されていないもの
-    const r1 = await db.execute(sql`
+  // 【高速化】 旧: 3本のSQLを逐次(3RTT)
+  //          新: 3本を Promise.all で並列(1RTT)
+  const [r1, r2, r3] = await Promise.all([
+    db.execute(sql`
       with attempt_seq as (
         select question_id, is_correct,
                row_number() over (partition by question_id order by attempted_at desc) as rn
@@ -104,13 +105,8 @@ async function getSummary(userId: string): Promise<Summary> {
       from ever_wrong ew
       left join last_two lt on lt.question_id = ew.question_id
       where (lt.last1 is not true or lt.last2 is not true)
-    `);
-    const r1rows = (r1 as unknown as { rows?: { c: number }[] }).rows
-      ?? (r1 as unknown as { c: number }[]);
-    const current_wrong = r1rows?.[0]?.c ?? 0;
-
-    // this_week_resolved: 直近7日で、過去に間違えた問題を正解した数
-    const r2 = await db.execute(sql`
+    `).catch(() => null),
+    db.execute(sql`
       select count(distinct a.question_id)::int as c
       from attempts a
       where a.user_id = ${userId}
@@ -123,28 +119,26 @@ async function getSummary(userId: string): Promise<Summary> {
             and a0.is_correct = false
             and a0.attempted_at < a.attempted_at
         )
-    `);
-    const r2rows = (r2 as unknown as { rows?: { c: number }[] }).rows
-      ?? (r2 as unknown as { c: number }[]);
-    const this_week_resolved = r2rows?.[0]?.c ?? 0;
-
-    // high_priority: 2回以上間違えた問題
-    const r3 = await db.execute(sql`
+    `).catch(() => null),
+    db.execute(sql`
       select count(*)::int as c from (
         select question_id from attempts
         where user_id = ${userId} and is_correct = false
         group by question_id
         having count(*) >= 2
       ) t
-    `);
-    const r3rows = (r3 as unknown as { rows?: { c: number }[] }).rows
-      ?? (r3 as unknown as { c: number }[]);
-    const high_priority = r3rows?.[0]?.c ?? 0;
+    `).catch(() => null),
+  ]);
 
-    return { current_wrong, this_week_resolved, high_priority };
-  } catch {
-    return { current_wrong: 0, this_week_resolved: 0, high_priority: 0 };
-  }
+  const r1rows = r1 ? ((r1 as unknown as { rows?: { c: number }[] }).rows ?? (r1 as unknown as { c: number }[])) : [];
+  const r2rows = r2 ? ((r2 as unknown as { rows?: { c: number }[] }).rows ?? (r2 as unknown as { c: number }[])) : [];
+  const r3rows = r3 ? ((r3 as unknown as { rows?: { c: number }[] }).rows ?? (r3 as unknown as { c: number }[])) : [];
+
+  return {
+    current_wrong: r1rows?.[0]?.c ?? 0,
+    this_week_resolved: r2rows?.[0]?.c ?? 0,
+    high_priority: r3rows?.[0]?.c ?? 0,
+  };
 }
 
 async function getSectionStats(userId: string): Promise<SectionStats[]> {
