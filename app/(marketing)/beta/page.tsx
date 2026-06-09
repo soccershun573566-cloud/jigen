@@ -1,5 +1,5 @@
 // β版専用LP — 2026年7月1次受験者向け緊急ローンチ
-// 残り41日のカウントダウン + ¥980/月 × 3ヶ月 + 完走¥1,490永久ロック + 30名限定
+// 残り日数カウントダウン + ¥980 買い切り(2026/07/20まで) + 30名限定
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
@@ -27,7 +27,7 @@ import { CheckoutButton } from '@/components/billing/CheckoutButton';
 export const metadata: Metadata = {
   title: 'ジゲンβ版 30名限定募集 | 1級建築施工管理技士のAI伴走パートナー',
   description:
-    '2026年7月の1次試験まで直前駆け込み層を救う、AI伴走パートナー「ジゲン」のβ版。月額¥980で即日学習スタート(無料期間なし)、完走者は永久¥1,490ロック特典付き。30名限定。',
+    '2026年7月の1次試験まで直前駆け込み層を救う、AI伴走パートナー「ジゲン」のβ版。¥980 買い切りで 2026/07/20まで使い放題(サブスクなし)。30名限定。',
 };
 
 // 日付計算を毎リクエストで実行(毎日0:00 JSTでカウントダウン更新)
@@ -210,65 +210,6 @@ export default function BetaPage() {
                 </li>
               </ul>
             </article>
-          </div>
-        </div>
-      </section>
-
-      {/* ============ β完走特典 ============ */}
-      <section className="relative border-t border-jigen-border-soft/40 bg-gradient-to-b from-jigen-bg-dark to-jigen-bg-panel/40 py-20">
-        <div className="mx-auto w-full max-w-4xl px-6">
-          <div className="mb-10 text-center">
-            <p className="mb-2 text-[10px] uppercase tracking-[0.3em] text-jigen-gold">β Reward</p>
-            <h2 className="text-2xl font-extrabold tracking-tight sm:text-4xl">
-              β完走者だけの <span className="text-jigen-gold">永久特典</span>
-            </h2>
-          </div>
-
-          <div className="mx-auto max-w-3xl rounded-2xl border-2 border-jigen-gold bg-panel-gradient p-6 shadow-gold-glow sm:p-10">
-            <div className="mb-6 text-center">
-              <p className="text-[11px] uppercase tracking-[0.25em] text-jigen-gold">3ヶ月完走で</p>
-              <p className="mt-2 text-3xl font-extrabold text-jigen-ink sm:text-4xl">
-                以降は <span className="text-jigen-gold">¥1,490/月</span>
-              </p>
-              <p className="mt-1 text-xs text-jigen-ink-soft">永久ロック(値上げなし)・通常¥2,980から半額</p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-jigen-border-soft bg-jigen-bg-dark/60 p-4">
-                <p className="mb-1 text-xs font-semibold text-jigen-gold">3ヶ月完走の条件</p>
-                <ul className="space-y-1 text-[11px] text-jigen-ink-soft">
-                  <li className="flex items-start gap-1.5">
-                    <Check aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-jigen-gold" />
-                    月1回 簡易アンケート(2分)
-                  </li>
-                  <li className="flex items-start gap-1.5">
-                    <Check aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-jigen-gold" />
-                    バグ報告・改善提案 1件以上/月
-                  </li>
-                  <li className="flex items-start gap-1.5">
-                    <Check aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-jigen-gold" />
-                    3ヶ月課金継続
-                  </li>
-                </ul>
-              </div>
-              <div className="rounded-lg border border-jigen-border-soft bg-jigen-bg-dark/60 p-4">
-                <p className="mb-1 text-xs font-semibold text-jigen-gold">完走特典内容</p>
-                <ul className="space-y-1 text-[11px] text-jigen-ink-soft">
-                  <li className="flex items-start gap-1.5">
-                    <Check aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-jigen-gold" />
-                    ¥1,490/月 永久ロック
-                  </li>
-                  <li className="flex items-start gap-1.5">
-                    <Check aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-jigen-gold" />
-                    2次経験記述AI添削 先行アクセス
-                  </li>
-                  <li className="flex items-start gap-1.5">
-                    <Check aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-jigen-gold" />
-                    合格体験記 公式掲載(任意)
-                  </li>
-                </ul>
-              </div>
-            </div>
           </div>
         </div>
       </section>
