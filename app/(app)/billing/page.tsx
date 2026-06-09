@@ -90,8 +90,8 @@ export default async function BillingPage() {
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-6 text-jigen-ink">
       <div className="mb-6">
-        <h1 className="text-2xl font-extrabold tracking-wide text-jigen-ink">プラン管理</h1>
-        <p className="mt-1 text-sm text-jigen-ink">あなたの時間・ペースで合格まで。</p>
+        <h1 className="text-2xl font-extrabold tracking-wide text-jigen-ink drop-shadow-[0_0_10px_rgba(245,196,65,0.25)]">プラン管理</h1>
+        <p className="mt-1 text-sm font-medium text-jigen-ink">あなたの時間・ペースで合格まで。</p>
       </div>
 
       {/* 現在の有効プラン一覧 */}
@@ -155,16 +155,16 @@ export default async function BillingPage() {
       {/* プラン選択(有効プラン無しの場合のみ) */}
       {!hasAnyActive ? (
         <>
-          <section className="mb-3 rounded-xl border border-jigen-warning/40 bg-jigen-warning-soft/10 p-4">
+          <section className="mb-3 rounded-xl border border-jigen-warning/50 bg-jigen-warning-soft/15 p-4">
             <p className="text-sm font-bold text-jigen-warning">直前駆け込み層向け β枠 残席あり</p>
-            <p className="mt-1 text-xs text-jigen-ink">¥980 一括で 2026/07/20 まで使い放題。 サブスク不要。</p>
+            <p className="mt-1 text-xs font-medium text-jigen-ink">¥980 一括で 2026/07/20 まで使い放題。 サブスク不要。</p>
           </section>
 
           <section className="mb-6 grid gap-4 sm:grid-cols-2">
             <article className="rounded-2xl border-2 border-jigen-warning bg-panel-gradient p-6 shadow-[0_0_20px_rgba(239,68,68,0.25)]">
               <span className="inline-block rounded-full bg-jigen-warning/15 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-jigen-warning">β限定 / 1次</span>
               <p className="mt-2 text-4xl font-extrabold tabular-nums">¥980<span className="ml-1 text-sm font-normal text-jigen-ink">一括</span></p>
-              <p className="mt-1 text-xs text-jigen-ink">2026/07/20まで使い放題</p>
+              <p className="mt-1 text-xs font-medium text-jigen-ink">2026/07/20まで使い放題</p>
               <ul className="mb-5 mt-4 space-y-1.5 text-xs text-jigen-ink">
                 <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />1次対策の全機能アクセス</li>
                 <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />初回50問模試 + 直前模試(7/1〜)</li>
@@ -176,7 +176,7 @@ export default async function BillingPage() {
             <article className="rounded-2xl border border-jigen-border-soft bg-jigen-bg-panel p-6">
               <span className="inline-block rounded-full bg-jigen-bg-panel-2 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-jigen-ink-mute">β限定 / 2次</span>
               <p className="mt-2 text-4xl font-extrabold tabular-nums">¥1,480<span className="ml-1 text-sm font-normal text-jigen-ink">一括</span></p>
-              <p className="mt-1 text-xs text-jigen-ink">2026/10/19まで使い放題</p>
+              <p className="mt-1 text-xs font-medium text-jigen-ink">2026/10/19まで使い放題</p>
               <ul className="mb-5 mt-4 space-y-1.5 text-xs text-jigen-ink">
                 <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />1次 + 2次 両方の全機能</li>
                 <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />経験記述AI添削(完成次第)</li>

@@ -34,23 +34,35 @@ export async function POST(req: Request) {
     const plan = parsed.data.plan;
 
     // 買い切りプランは重複購入禁止
-    if (plan === 'beta_first' || plan === 'beta_second_new' || plan === 'beta_second_upgrade') {
-      const targetTypes =
-        plan === 'beta_first' ? ['beta_first']
-        : ['beta_second_new', 'beta_second_upgrade']; // 2次は new/upgrade どちらかあれば重複扱い
+    if (plan === 'beta_first') {
       const r = await db.execute(sql`
-        select plan_type, valid_until from licenses
+        select valid_until from licenses
         where user_id = ${user.id}::uuid
-          and plan_type = any(${targetTypes}::text[])
+          and plan_type = 'beta_first'
           and valid_until > now()
         limit 1
       `);
-      const rows = (r as unknown as { rows?: Array<{ plan_type: string; valid_until: string }> }).rows
-        ?? (r as unknown as Array<{ plan_type: string; valid_until: string }>);
+      const rows = (r as unknown as { rows?: Array<{ valid_until: string }> }).rows
+        ?? (r as unknown as Array<{ valid_until: string }>);
       if (rows && rows.length > 0) {
-        const planName = plan === 'beta_first' ? 'β1次プラン' : 'β2次プラン';
         return NextResponse.json({
-          error: { code: 'already_purchased', message: `${planName}は既にご購入済みです(有効期限: ${rows[0].valid_until})` }
+          error: { code: 'already_purchased', message: `β1次プランは既にご購入済みです(有効期限: ${rows[0].valid_until})` }
+        }, { status: 409 });
+      }
+    }
+    if (plan === 'beta_second_new' || plan === 'beta_second_upgrade') {
+      const r = await db.execute(sql`
+        select valid_until from licenses
+        where user_id = ${user.id}::uuid
+          and plan_type in ('beta_second_new', 'beta_second_upgrade')
+          and valid_until > now()
+        limit 1
+      `);
+      const rows = (r as unknown as { rows?: Array<{ valid_until: string }> }).rows
+        ?? (r as unknown as Array<{ valid_until: string }>);
+      if (rows && rows.length > 0) {
+        return NextResponse.json({
+          error: { code: 'already_purchased', message: `β2次プランは既にご購入済みです(有効期限: ${rows[0].valid_until})` }
         }, { status: 409 });
       }
     }
