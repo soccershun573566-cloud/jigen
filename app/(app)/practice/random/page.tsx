@@ -16,7 +16,8 @@ import type { PracticeNextResponse } from '@/types/api';
 type Phase = 'loading' | 'error' | 'ready';
 
 const QUEUE_KEY = 'jigen_question_queue_v1';
-const QUEUE_TARGET = 5; // 常にここまで先読みしておく(テンポ重視)
+const QUEUE_TARGET = 10; // 常にここまで先読みしておく(テンポ重視・2026-06-09 5→10に拡張)
+const QUEUE_PARALLEL = 3; // バックグラウンド補充時の同時 fetch 数(3並列)
 
 type CachedQuestion = PracticeNextResponse & {
   choices?: unknown;
@@ -81,7 +82,9 @@ async function fetchOne(): Promise<CachedQuestion | null> {
   return data?.id ? data : null;
 }
 
-// キューを target 件まで補充(バックグラウンド)
+// キューを target 件まで補充(バックグラウンド・並列バッチ)
+// 旧: 逐次1問ずつ取得(target×RTT)
+// 新: 不足分を最大 QUEUE_PARALLEL 並列で取りに行く(数分の1の時間)
 async function refillQueue(currentId: string | null) {
   let queue = readQueue();
   // 現在表示中の問題と重複する場合は除外
@@ -90,14 +93,22 @@ async function refillQueue(currentId: string | null) {
     writeQueue(queue);
   }
 
+  // 不足数を計算して、 並列バッチで補充
   while (queue.length < QUEUE_TARGET) {
-    const next = await fetchOne();
-    if (!next) break;
-    // 重複排除(キュー内 + 現在表示中)
-    if (currentId && next.id === currentId) continue;
-    if (queue.some((q) => q.id === next.id)) continue;
-    queue.push(next);
+    const need = QUEUE_TARGET - queue.length;
+    const batch = Math.min(need, QUEUE_PARALLEL);
+    const fetched = await Promise.all(Array.from({ length: batch }, () => fetchOne()));
+    let appended = 0;
+    for (const next of fetched) {
+      if (!next) continue;
+      if (currentId && next.id === currentId) continue;
+      if (queue.some((q) => q.id === next.id)) continue;
+      queue.push(next);
+      appended++;
+    }
     writeQueue(queue);
+    // 1問も追加できなかったら(全部重複/エラー)、 無限ループ防止で抜ける
+    if (appended === 0) break;
   }
 }
 

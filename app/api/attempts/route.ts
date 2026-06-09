@@ -46,7 +46,8 @@ export async function POST(req: Request) {
     // 進捗カウント分離用 source(クライアントから明示・デフォルト 'daily')
     const source: 'daily' | 'mistakes' | 'other' = parsed.data.source ?? 'daily';
 
-    // 公開問題のみ採点対象
+    // 【高速化】 questions ロードと、 一旦は mastery_profiles の全 user 分は先読みせず
+    //   sub_topic 不明な段階(question 取得前)なので questions だけ先に1往復で取得
     const [question] = await db
       .select()
       .from(questions)
@@ -65,33 +66,38 @@ export async function POST(req: Request) {
       userAnswer,
     );
 
-    // attempts INSERT(RLS attempts_self_insert で通る) — source も保存
-    const [inserted] = await db
-      .insert(attempts)
-      .values({
-        userId: user.id,
-        questionId: question.id,
-        dailyTaskId: dailyTaskId ?? null,
-        userAnswer: userAnswer ?? null,
-        isCorrect,
-        isNearMiss,
-        responseSeconds,
-        confidence: confidence ?? null,
-        source,
-      })
-      .returning();
+    // 【高速化】 attempts INSERT と mastery_profiles SELECT を並列実行
+    //   (旧: 逐次 2 RTT → 新: 並列 1 RTT)
+    //   いずれも question.subTopic と user.id を使うが、 相互依存はない
+    const [insertResult, priorResult] = await Promise.all([
+      db
+        .insert(attempts)
+        .values({
+          userId: user.id,
+          questionId: question.id,
+          dailyTaskId: dailyTaskId ?? null,
+          userAnswer: userAnswer ?? null,
+          isCorrect,
+          isNearMiss,
+          responseSeconds,
+          confidence: confidence ?? null,
+          source,
+        })
+        .returning(),
+      db
+        .select()
+        .from(masteryProfiles)
+        .where(
+          and(
+            eq(masteryProfiles.userId, user.id),
+            eq(masteryProfiles.subTopic, question.subTopic),
+          ),
+        )
+        .limit(1),
+    ]);
 
-    // 既存 mastery 取得(self_select で通る)
-    const [prior] = await db
-      .select()
-      .from(masteryProfiles)
-      .where(
-        and(
-          eq(masteryProfiles.userId, user.id),
-          eq(masteryProfiles.subTopic, question.subTopic),
-        ),
-      )
-      .limit(1);
+    const [inserted] = insertResult;
+    const [prior] = priorResult;
 
     const priorP = prior?.masteryP ?? defaultBktParams.pL0;
     const newP = updateMastery(priorP, isCorrect, defaultBktParams);

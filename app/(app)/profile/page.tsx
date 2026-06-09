@@ -216,32 +216,14 @@ function phaseFromDays(daysLeft: number | null): { key: Strategy['phaseKey']; la
 }
 
 async function getStrategy(userId: string, sections: SectionStats[]): Promise<Strategy> {
-  // 1. 試験日からの残り日数
-  let daysLeft: number | null = null;
-  try {
-    const r = await db.execute(sql`
+  // 【高速化】 旧: 3本のSQLを逐次 await(3 RTT)
+  //          新: 3本を Promise.all で並列(1 RTT)
+  const [daysLeftRaw, reviewDueRaw, srsDueRaw] = await Promise.all([
+    db.execute(sql`
       select (target_exam_date - current_date)::int as d
       from users where id = ${userId} and target_exam_date is not null
-    `);
-    const rows = (r as unknown as { rows?: { d: number }[] }).rows ?? (r as unknown as { d: number }[]);
-    daysLeft = rows?.[0]?.d ?? null;
-  } catch {
-    daysLeft = null;
-  }
-
-  const phase = phaseFromDays(daysLeft);
-
-  // 2. 弱点教科(5問以上挑戦してる中で最低正答率)
-  const candidates = sections
-    .filter((s) => s.total >= 5)
-    .map((s) => ({ section: s.section, pct: pct(s.correct, s.total), total: s.total }))
-    .sort((a, b) => a.pct - b.pct);
-  const weakestSection = candidates[0] ?? null;
-
-  // 3. 復習(間違え)の件数
-  let reviewDueCount = 0;
-  try {
-    const r = await db.execute(sql`
+    `).catch(() => null),
+    db.execute(sql`
       with attempt_seq as (
         select question_id, is_correct, attempted_at,
                row_number() over (partition by question_id order by attempted_at desc) as rn
@@ -264,17 +246,8 @@ async function getStrategy(userId: string, sections: SectionStats[]): Promise<St
       join last_two lt on lt.question_id = ew.question_id
       where (lt.last1 is not true or lt.last2 is not true)
         and lt.last_attempt < now() - interval '2 days'
-    `);
-    const rows = (r as unknown as { rows?: { c: number }[] }).rows ?? (r as unknown as { c: number }[]);
-    reviewDueCount = rows?.[0]?.c ?? 0;
-  } catch {
-    reviewDueCount = 0;
-  }
-
-  // 4. SRS due 件数(連続正解数から推奨復習間隔を計算、期限到来)
-  let srsDueCount = 0;
-  try {
-    const r = await db.execute(sql`
+    `).catch(() => null),
+    db.execute(sql`
       with attempt_seq as (
         select question_id, is_correct, attempted_at,
                row_number() over (partition by question_id order by attempted_at desc) as rn
@@ -307,12 +280,38 @@ async function getStrategy(userId: string, sections: SectionStats[]): Promise<St
             when 5 then interval '30 days'
             else interval '60 days'
           end
-    `);
-    const rows = (r as unknown as { rows?: { c: number }[] }).rows ?? (r as unknown as { c: number }[]);
-    srsDueCount = rows?.[0]?.c ?? 0;
-  } catch {
-    srsDueCount = 0;
-  }
+    `).catch(() => null),
+  ]);
+
+  // 1. 試験日からの残り日数
+  const dlRows = daysLeftRaw
+    ? ((daysLeftRaw as unknown as { rows?: { d: number }[] }).rows
+        ?? (daysLeftRaw as unknown as { d: number }[]))
+    : [];
+  const daysLeft = dlRows?.[0]?.d ?? null;
+
+  const phase = phaseFromDays(daysLeft);
+
+  // 2. 弱点教科(5問以上挑戦してる中で最低正答率)
+  const candidates = sections
+    .filter((s) => s.total >= 5)
+    .map((s) => ({ section: s.section, pct: pct(s.correct, s.total), total: s.total }))
+    .sort((a, b) => a.pct - b.pct);
+  const weakestSection = candidates[0] ?? null;
+
+  // 3. 復習(間違え)の件数
+  const rdRows = reviewDueRaw
+    ? ((reviewDueRaw as unknown as { rows?: { c: number }[] }).rows
+        ?? (reviewDueRaw as unknown as { c: number }[]))
+    : [];
+  const reviewDueCount = rdRows?.[0]?.c ?? 0;
+
+  // 4. SRS due 件数
+  const sdRows = srsDueRaw
+    ? ((srsDueRaw as unknown as { rows?: { c: number }[] }).rows
+        ?? (srsDueRaw as unknown as { c: number }[]))
+    : [];
+  const srsDueCount = sdRows?.[0]?.c ?? 0;
 
   return {
     daysLeft,

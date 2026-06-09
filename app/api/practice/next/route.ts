@@ -54,61 +54,81 @@ type PhaseWeights = { review: number; srs: number; adaptive: number };
 // 1日の目標問題数(users.daily_target_questions から取得・未設定なら25)
 const DEFAULT_TODAY_TARGET = 25;
 
-async function getTodayTarget(userId: string): Promise<number> {
-  try {
-    const r = await db.execute(sql`
-      select daily_target_questions from users where id = ${userId} limit 1
-    `);
-    const rows = (r as unknown as { rows?: Array<{ daily_target_questions: number }> }).rows
-      ?? (r as unknown as Array<{ daily_target_questions: number }>);
-    const v = rows?.[0]?.daily_target_questions;
-    return typeof v === 'number' && v > 0 ? v : DEFAULT_TODAY_TARGET;
-  } catch {
-    return DEFAULT_TODAY_TARGET;
-  }
-}
-
-async function countSolvedTodayDaily(userId: string): Promise<number> {
-  try {
-    const r = await db.execute(sql`
+// 旧: users テーブルを2回(daily_target_questions / target_exam_date)+ attempts カウント 1回 で 3 RTT
+// 新: users 取得を 1 本に統合 + attempts カウントと並列実行 で 1 RTT
+async function getUserMetrics(userId: string): Promise<{
+  todayTarget: number;
+  weights: PhaseWeights;
+  todaySolved: number;
+}> {
+  const [usersR, countR] = await Promise.all([
+    db.execute(sql`
+      select daily_target_questions,
+             case when target_exam_date is null then null
+                  else (target_exam_date - current_date)::int end as days_left
+      from users where id = ${userId} limit 1
+    `).catch(() => null),
+    db.execute(sql`
       select count(*)::int as c
       from attempts
       where user_id = ${userId}
         and source = 'daily'
         and (attempted_at at time zone 'Asia/Tokyo')::date
             = (now() at time zone 'Asia/Tokyo')::date
-    `);
-    const rows = (r as unknown as { rows?: { c: number }[] }).rows ?? (r as unknown as { c: number }[]);
-    return rows?.[0]?.c ?? 0;
-  } catch {
-    return 0;
-  }
+    `).catch(() => null),
+  ]);
+
+  const userRows = usersR
+    ? ((usersR as unknown as { rows?: Array<{ daily_target_questions: number | null; days_left: number | null }> }).rows
+        ?? (usersR as unknown as Array<{ daily_target_questions: number | null; days_left: number | null }>))
+    : [];
+  const u = userRows?.[0];
+  const v = u?.daily_target_questions;
+  const todayTarget = typeof v === 'number' && v > 0 ? v : DEFAULT_TODAY_TARGET;
+  const daysLeft = u?.days_left ?? null;
+  const weights = weightsFromDaysLeft(daysLeft);
+
+  const countRows = countR
+    ? ((countR as unknown as { rows?: { c: number }[] }).rows ?? (countR as unknown as { c: number }[]))
+    : [];
+  const todaySolved = countRows?.[0]?.c ?? 0;
+
+  return { todayTarget, weights, todaySolved };
+}
+
+function weightsFromDaysLeft(daysLeft: number | null): PhaseWeights {
+  if (daysLeft == null) return { review: 0.35, srs: 0.15, adaptive: 0.50 };
+  if (daysLeft < 0)    return { review: 0.40, srs: 0.30, adaptive: 0.30 };
+  if (daysLeft <= 30)  return { review: 0.50, srs: 0.30, adaptive: 0.20 };
+  if (daysLeft <= 90)  return { review: 0.30, srs: 0.25, adaptive: 0.45 };
+  return                       { review: 0.35, srs: 0.15, adaptive: 0.50 };
 }
 
 export async function GET() {
   try {
     const user = await requireUser();
 
-    // フェーズ判定
-    const weights = await decidePhaseWeights(user.id);
+    // 【大幅高速化】 ユーザー情報 + 3プール候補を1回の往復で並列取得
+    // 旧: フェーズ判定(1) → 該当プール選択(1) → フォールバック(1-2) → 進捗集計(2並列) = 最大5往復
+    // 新: 全部並列 = 1往復(最遅クエリの時間のみ)
+    const [metrics, reviewRow, srsRow, adaptiveRow] = await Promise.all([
+      getUserMetrics(user.id),
+      pickReviewDue(user.id).catch(() => null),
+      pickSrsDue(user.id).catch(() => null),
+      pickAdaptiveZpd(user.id).catch(() => null),
+    ]);
 
-    // 確率分配でプール選択(累積分布)
+    // 確率分配でプール選択(累積分布)+ 不在なら近い順にフォールバック
     const r = Math.random();
-    const thresholdReview = weights.review;
-    const thresholdSrs = weights.review + weights.srs;
+    const thresholdReview = metrics.weights.review;
+    const thresholdSrs = metrics.weights.review + metrics.weights.srs;
 
-    let row: QuestionRow | null = null;
+    let row: QuestionRow | null;
+    if (r < thresholdReview) row = reviewRow ?? srsRow ?? adaptiveRow;
+    else if (r < thresholdSrs) row = srsRow ?? adaptiveRow ?? reviewRow;
+    else row = adaptiveRow ?? srsRow ?? reviewRow;
 
-    if (r < thresholdReview) {
-      row = await pickReviewDue(user.id);
-    } else if (r < thresholdSrs) {
-      row = await pickSrsDue(user.id);
-    } else {
-      row = await pickAdaptiveZpd(user.id);
-    }
-
-    // フォールバック: 何もヒットしなければ adaptive → 完全ランダム
-    if (!row) row = await pickAdaptiveZpd(user.id);
+    // 最終フォールバック: 完全ランダム
     if (!row) row = await pickRandomFallback();
 
     if (!row) {
@@ -117,11 +137,6 @@ export async function GET() {
         { status: 404 },
       );
     }
-
-    const [todaySolved, todayTarget] = await Promise.all([
-      countSolvedTodayDaily(user.id),
-      getTodayTarget(user.id),
-    ]);
 
     return NextResponse.json({
       id: row.id,
@@ -135,8 +150,8 @@ export async function GET() {
       isNumeric: row.is_numeric,
       remainingToday: null,
       totalPublished: null,
-      todaySolved,
-      todayTarget,
+      todaySolved: metrics.todaySolved,
+      todayTarget: metrics.todayTarget,
     });
   } catch (err) {
     if (err instanceof Response) return err;
@@ -150,29 +165,6 @@ export async function GET() {
 function extractRow(result: unknown): QuestionRow | null {
   const rows = (result as { rows?: QuestionRow[] }).rows ?? (result as QuestionRow[]);
   return rows && rows.length > 0 ? (rows[0] ?? null) : null;
-}
-
-/**
- * 段階5: 試験日からフェーズを判定して出題比率を返す
- */
-async function decidePhaseWeights(userId: string): Promise<PhaseWeights> {
-  const result = await db.execute(sql`
-    select
-      case
-        when target_exam_date is null then null
-        else (target_exam_date - current_date)::int
-      end as days_left
-    from users where id = ${userId}
-    limit 1
-  `);
-  const rows = (result as { rows?: { days_left: number | null }[] }).rows ?? [];
-  const daysLeft = rows[0]?.days_left ?? null;
-
-  if (daysLeft == null) return { review: 0.35, srs: 0.15, adaptive: 0.50 };
-  if (daysLeft < 0)    return { review: 0.40, srs: 0.30, adaptive: 0.30 };
-  if (daysLeft <= 30)  return { review: 0.50, srs: 0.30, adaptive: 0.20 };
-  if (daysLeft <= 90)  return { review: 0.30, srs: 0.25, adaptive: 0.45 };
-  return                       { review: 0.35, srs: 0.15, adaptive: 0.50 };
 }
 
 /**
