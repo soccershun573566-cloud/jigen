@@ -55,7 +55,7 @@ export function ContactForm() {
         <Check aria-hidden className="mx-auto h-12 w-12 text-emerald-400" />
         <p className="mt-3 text-base font-bold text-foreground">送信完了しました</p>
         <p className="mt-1 text-sm text-foreground/70">
-          通常2営業日以内に <b>{email}</b> 宛にご返信します。
+          ご記入いただいたメールアドレス宛に、 通常2営業日以内にご返信いたします。
         </p>
         <p className="mt-1 text-xs text-foreground/50">(土日祝・年末年始を除く)</p>
       </div>
