@@ -71,14 +71,42 @@ export function LearningSettings(p: Props) {
       {/* 試験日 */}
       <div>
         <label className="mb-2 block text-xs font-bold text-jigen-gold inline-flex items-center gap-1">
-          <Calendar className="h-3.5 w-3.5" />試験日
+          <Calendar className="h-3.5 w-3.5" />試験日(自由変更可能)
         </label>
         <input
           type="date"
           value={examDate}
           onChange={(e) => setExamDate(e.target.value)}
-          className="w-full rounded-lg border border-jigen-border-soft bg-jigen-bg-dark px-3 py-2 text-sm text-jigen-ink focus:border-jigen-gold focus:outline-none"
+          min="2026-01-01"
+          max="2030-12-31"
+          className="w-full rounded-lg border border-jigen-border-soft bg-jigen-bg-dark px-3 py-2 text-sm text-white font-medium focus:border-jigen-gold focus:outline-none [color-scheme:dark]"
         />
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+          <span className="text-jigen-ink-mute">候補:</span>
+          <button
+            type="button"
+            onClick={() => setExamDate('2026-07-19')}
+            className="rounded-md border border-jigen-gold/40 bg-jigen-gold/10 px-2 py-1 font-bold text-jigen-gold hover:bg-jigen-gold/20"
+          >
+            2026/07/19(1次)
+          </button>
+          <button
+            type="button"
+            onClick={() => setExamDate('2026-10-18')}
+            className="rounded-md border border-jigen-gold/40 bg-jigen-gold/10 px-2 py-1 font-bold text-jigen-gold hover:bg-jigen-gold/20"
+          >
+            2026/10/18(2次)
+          </button>
+          {examDate ? (
+            <button
+              type="button"
+              onClick={() => setExamDate('')}
+              className="rounded-md border border-jigen-border-soft px-2 py-1 text-jigen-ink-mute hover:text-jigen-warning"
+            >
+              クリア
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {/* 1日の目標問題数 */}
@@ -99,7 +127,7 @@ export function LearningSettings(p: Props) {
             >
               <div className="flex items-baseline justify-between">
                 <span className="font-bold">{opt.label}</span>
-                <span className="text-[10px] text-jigen-ink-soft">{opt.desc}</span>
+                <span className="text-[10px] font-medium text-jigen-ink">{opt.desc}</span>
               </div>
             </button>
           ))}
