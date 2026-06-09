@@ -99,11 +99,11 @@ export default async function SettingsPage() {
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-6 text-jigen-ink">
       {/* ヘッダ */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-extrabold tracking-wide text-white drop-shadow-[0_0_14px_rgba(245,196,65,0.6)]">
+      <div className="mb-6 border-b border-jigen-gold/30 pb-4">
+        <h1 className="text-4xl font-black tracking-wider bg-gold-gradient bg-clip-text text-transparent drop-shadow-[0_0_24px_rgba(245,196,65,0.55)]">
           設定
         </h1>
-        <p className="mt-2 text-sm font-semibold text-jigen-ink">
+        <p className="mt-3 text-sm font-bold text-white/95">
           学習スタイルや通知を整えるところ。 いつでも変更できます。
         </p>
       </div>
