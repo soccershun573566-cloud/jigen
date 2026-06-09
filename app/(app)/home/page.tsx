@@ -18,24 +18,51 @@ export const revalidate = 0;
 const DEFAULT_TODAY_TARGET = 25; // フォールバック値(users.daily_target_questions が無い場合)
 
 // 旧: getDailyTarget と isOnboarded を別クエリで2回users取得 → DB往復2回
-// 新: 1本に統合 → DB往復1回(RTT 半分)
-async function getUserBasic(userId: string): Promise<{ onboarded: boolean; dailyTarget: number }> {
+// 新: 1本に統合 → DB往復1回(RTT 半分)+ target_exam_date も同時取得
+async function getUserBasic(userId: string): Promise<{
+  onboarded: boolean;
+  dailyTarget: number;
+  examDate: string | null;
+  daysLeft: number | null;
+}> {
   try {
     const r = await db.execute(sql`
-      select onboarded_at, daily_target_questions
+      select onboarded_at, daily_target_questions,
+             to_char(target_exam_date, 'YYYY-MM-DD') as exam_date,
+             (target_exam_date - current_date)::int as days_left
       from users where id = ${userId} limit 1
     `);
-    const rows = (r as unknown as { rows?: Array<{ onboarded_at: string | null; daily_target_questions: number | null }> }).rows
-      ?? (r as unknown as Array<{ onboarded_at: string | null; daily_target_questions: number | null }>);
+    const rows = (r as unknown as { rows?: Array<{
+      onboarded_at: string | null;
+      daily_target_questions: number | null;
+      exam_date: string | null;
+      days_left: number | null;
+    }> }).rows
+      ?? (r as unknown as Array<{
+        onboarded_at: string | null;
+        daily_target_questions: number | null;
+        exam_date: string | null;
+        days_left: number | null;
+      }>);
     const row = rows?.[0];
     const v = row?.daily_target_questions;
     return {
       onboarded: !!row?.onboarded_at,
       dailyTarget: typeof v === 'number' && v > 0 ? v : DEFAULT_TODAY_TARGET,
+      examDate: row?.exam_date ?? null,
+      daysLeft: typeof row?.days_left === 'number' ? row.days_left : null,
     };
   } catch {
-    return { onboarded: false, dailyTarget: DEFAULT_TODAY_TARGET };
+    return { onboarded: false, dailyTarget: DEFAULT_TODAY_TARGET, examDate: null, daysLeft: null };
   }
+}
+
+// 1級建築施工管理技士 1次試験のデフォルト試験日(ユーザー未設定時のフォールバック)
+const DEFAULT_EXAM_DATE = '2026-07-19';
+function calcDaysLeft(examDate: string): number {
+  const t = new Date(examDate + 'T09:30:00+09:00').getTime();
+  const now = Date.now();
+  return Math.max(0, Math.ceil((t - now) / (24 * 60 * 60 * 1000)));
 }
 
 // 期間限定の特別模試(初回模試以外)を1件取得
@@ -139,7 +166,7 @@ export default async function HomePage() {
         getSpecialMock(user.id),
       ])
     : [
-        { onboarded: true, dailyTarget: DEFAULT_TODAY_TARGET },
+        { onboarded: true, dailyTarget: DEFAULT_TODAY_TARGET, examDate: null, daysLeft: null },
         0,
         { status: 'unstarted' as const },
         null,
@@ -153,8 +180,16 @@ export default async function HomePage() {
   const todayTarget = basic.dailyTarget;
   const progressPct = todayTarget > 0 ? Math.min(100, Math.round((todaySolved / todayTarget) * 100)) : 0;
 
+  // 試験日・残り日数: 設定値があれば優先、 なければデフォルト 2026/07/19
+  const examDate = basic.examDate ?? DEFAULT_EXAM_DATE;
+  const daysLeft = basic.daysLeft != null && basic.daysLeft >= 0
+    ? basic.daysLeft
+    : calcDaysLeft(examDate);
+
   const data = {
     ...mock,
+    examDate,
+    daysLeft,
     today: {
       ...mock.today,
       totalQuestions: todayTarget,
