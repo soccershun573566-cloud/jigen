@@ -89,13 +89,13 @@ function SignupForm() {
           {isBeta ? (
             <>
               <span className="inline-block rounded-full border border-jigen-warning/60 bg-jigen-warning-soft/15 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-jigen-warning">
-                30名限定 β枠
+                30名限定 試験直前ver
               </span>
               <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground md:text-3xl">
-                β1次プランに申し込む
+                試験直前ver(1次) に申し込む
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                ¥980 買い切りで<span className="font-semibold text-foreground">2026/07/20まで使い放題</span>。
+                ¥1,500 買い切りで<span className="font-semibold text-foreground">2026/07/20まで使い放題</span>。
                 登録後すぐStripe決済画面に進みます。
               </p>
             </>
@@ -172,11 +172,11 @@ function SignupForm() {
             size="lg"
             className="w-full min-h-12 text-base"
             disabled={loading}
-            aria-label={isBeta ? 'β枠に申し込む' : 'メールアドレスで新規登録'}
+            aria-label={isBeta ? '試験直前ver に申し込む' : 'メールアドレスで新規登録'}
           >
             {loading
               ? '登録中...'
-              : (isBeta ? '登録して決済画面へ進む(¥980 一括)' : '始める')}
+              : (isBeta ? '登録して決済画面へ進む(¥1,500 一括)' : '始める')}
           </Button>
         </form>
 
@@ -195,9 +195,9 @@ function SignupForm() {
           size="lg"
           onClick={handleGoogle}
           className="w-full min-h-12 text-base"
-          aria-label={isBeta ? 'Googleアカウントでβ枠申し込み' : 'Googleアカウントで新規登録'}
+          aria-label={isBeta ? 'Googleアカウントで試験直前ver 申し込み' : 'Googleアカウントで新規登録'}
         >
-          {isBeta ? 'Googleでβ枠申し込み' : 'Googleで始める'}
+          {isBeta ? 'Googleで試験直前ver 申し込み' : 'Googleで始める'}
         </Button>
 
         <p className="mt-8 text-sm text-muted-foreground">

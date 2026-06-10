@@ -70,9 +70,9 @@ async function getActivePlan(userId: string): Promise<{ label: string; href: str
     const lic = ((lR as unknown as { rows?: LicenseRow[] }).rows ?? (lR as unknown as LicenseRow[]))?.[0];
 
     if (lic) {
-      const label = lic.plan_type === 'beta_first' ? 'β1次プラン'
-                  : lic.plan_type === 'beta_second_new' ? 'β2次プラン'
-                  : lic.plan_type === 'beta_second_upgrade' ? 'β2次プラン(アップグレード)'
+      const label = lic.plan_type === 'beta_first' ? '試験直前ver(1次)'
+                  : lic.plan_type === 'beta_second_new' ? '試験直前ver(2次)'
+                  : lic.plan_type === 'beta_second_upgrade' ? '試験直前ver(2次・1次購入者向け)'
                   : lic.plan_type;
       return { label, href: '/billing' };
     }
@@ -241,7 +241,7 @@ export default async function SettingsPage() {
 
       {/* バージョン情報 */}
       <p className="mb-6 text-center text-[10px] text-jigen-ink-mute">
-        ジゲン / ティラノ資格学校 / β
+        ジゲン / ティラノ資格学校 / 試験直前ver
       </p>
     </main>
   );

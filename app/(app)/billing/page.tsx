@@ -50,9 +50,9 @@ async function getActiveLicenses(userId: string): Promise<LicenseRow[]> {
 }
 
 function licensePlanLabel(plan: string): string {
-  if (plan === 'beta_first') return 'β1次プラン';
-  if (plan === 'beta_second_new') return 'β2次プラン';
-  if (plan === 'beta_second_upgrade') return 'β2次プラン(β1次からのアップグレード)';
+  if (plan === 'beta_first') return '試験直前ver(1次)';
+  if (plan === 'beta_second_new') return '試験直前ver(2次)';
+  if (plan === 'beta_second_upgrade') return '試験直前ver(2次・1次購入者向け)';
   return plan;
 }
 
@@ -140,14 +140,14 @@ export default async function BillingPage() {
         </section>
       ) : null}
 
-      {/* β1次を持ってる人向け β2次アップグレード提案 */}
+      {/* 試験直前ver 1次を持ってる人向け 2次アップグレード提案 */}
       {hasBetaFirst && !hasBetaSecond ? (
         <section className="mb-6 rounded-2xl border-2 border-jigen-gold bg-panel-gradient p-6 shadow-gold-glow">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-jigen-gold">β1次プラン購入者特典</p>
-          <h2 className="mt-2 text-xl font-extrabold tracking-tight">β2次プランを ¥980で(通常¥1,480)</h2>
-          <p className="mt-2 text-sm text-jigen-ink">2次試験(2026/10/19)までの完全サポート。 経験記述AI添削も付属(完成次第)。</p>
+          <p className="text-[10px] uppercase tracking-[0.25em] text-jigen-gold">試験直前ver(1次) 購入者特典</p>
+          <h2 className="mt-2 text-xl font-extrabold tracking-tight">試験直前ver(2次) を ¥1,500で(通常¥2,000)</h2>
+          <p className="mt-2 text-sm text-jigen-ink">2次試験(2026/10/19)までの完全サポート。 経験記述AI添削は2026/07/20より提供開始。</p>
           <div className="mt-4">
-            <CheckoutButton plan="beta_second_upgrade" label="β2次プランに進む(¥980)" />
+            <CheckoutButton plan="beta_second_upgrade" label="2次プランに進む(¥1,500)" />
           </div>
         </section>
       ) : null}
@@ -156,33 +156,33 @@ export default async function BillingPage() {
       {!hasAnyActive ? (
         <>
           <section className="mb-3 rounded-xl border border-jigen-warning/50 bg-jigen-warning-soft/15 p-4">
-            <p className="text-sm font-bold text-jigen-warning">直前駆け込み層向け β枠 残席あり</p>
-            <p className="mt-1 text-xs font-medium text-jigen-ink">¥980 一括で 2026/07/20 まで使い放題。 サブスク不要。</p>
+            <p className="text-sm font-bold text-jigen-warning">直前駆け込み層向け 試験直前ver 残席あり</p>
+            <p className="mt-1 text-xs font-medium text-jigen-ink">¥1,500 一括で 2026/07/20 まで使い放題。 サブスク不要。</p>
           </section>
 
           <section className="mb-6 grid gap-4 sm:grid-cols-2">
             <article className="rounded-2xl border-2 border-jigen-warning bg-panel-gradient p-6 shadow-[0_0_20px_rgba(239,68,68,0.25)]">
-              <span className="inline-block rounded-full bg-jigen-warning/15 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-jigen-warning">β限定 / 1次</span>
-              <p className="mt-2 text-4xl font-extrabold tabular-nums">¥980<span className="ml-1 text-sm font-normal text-jigen-ink">一括</span></p>
+              <span className="inline-block rounded-full bg-jigen-warning/15 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-jigen-warning">試験直前ver / 1次</span>
+              <p className="mt-2 text-4xl font-extrabold tabular-nums">¥1,500<span className="ml-1 text-sm font-normal text-jigen-ink">一括</span></p>
               <p className="mt-1 text-xs font-medium text-jigen-ink">2026/07/20まで使い放題</p>
               <ul className="mb-5 mt-4 space-y-1.5 text-xs text-jigen-ink">
                 <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />1次対策の全機能アクセス</li>
                 <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />初回50問模試 + 直前模試(7/1〜)</li>
                 <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />無料期間なし・即日開始</li>
               </ul>
-              <CheckoutButton plan="beta_first" label="β1次プランを購入(¥980)" />
+              <CheckoutButton plan="beta_first" label="試験直前ver(1次) を購入(¥1,500)" />
             </article>
 
             <article className="rounded-2xl border border-jigen-border-soft bg-jigen-bg-panel p-6">
-              <span className="inline-block rounded-full bg-jigen-bg-panel-2 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-jigen-ink-mute">β限定 / 2次</span>
-              <p className="mt-2 text-4xl font-extrabold tabular-nums">¥1,480<span className="ml-1 text-sm font-normal text-jigen-ink">一括</span></p>
+              <span className="inline-block rounded-full bg-jigen-bg-panel-2 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-jigen-ink-mute">試験直前ver / 2次</span>
+              <p className="mt-2 text-4xl font-extrabold tabular-nums">¥2,000<span className="ml-1 text-sm font-normal text-jigen-ink">一括</span></p>
               <p className="mt-1 text-xs font-medium text-jigen-ink">2026/10/19まで使い放題</p>
               <ul className="mb-5 mt-4 space-y-1.5 text-xs text-jigen-ink">
                 <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />1次 + 2次 両方の全機能</li>
-                <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />経験記述AI添削(完成次第)</li>
-                <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />β1次プラン購入者は ¥980で利用可</li>
+                <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />経験記述AI添削(2026/07/20より提供)</li>
+                <li className="flex items-start gap-2"><Check className="mt-0.5 h-3.5 w-3.5 text-jigen-gold" />1次プラン購入者は ¥1,500で利用可</li>
               </ul>
-              <CheckoutButton plan="beta_second_new" label="β2次プランを購入(¥1,480)" />
+              <CheckoutButton plan="beta_second_new" label="試験直前ver(2次) を購入(¥2,000)" />
             </article>
           </section>
 

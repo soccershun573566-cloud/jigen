@@ -25,9 +25,9 @@ import { TiranoSensei } from '@/components/mascot/TiranoSensei';
 import { CheckoutButton } from '@/components/billing/CheckoutButton';
 
 export const metadata: Metadata = {
-  title: 'ジゲンβ版 30名限定募集 | 1級建築施工管理技士のAI伴走パートナー',
+  title: 'ジゲン 試験直前ver | 1級建築施工管理技士 1次試験対策のAI伴走パートナー',
   description:
-    '2026年7月の1次試験まで直前駆け込み層を救う、AI伴走パートナー「ジゲン」のβ版。¥980 買い切りで 2026/07/20まで使い放題(サブスクなし)。30名限定。',
+    '2026年7月の1次試験まで直前駆け込み層を救う、AI伴走パートナー「ジゲン」 試験直前ver。¥1,500 買い切りで 2026/07/20まで使い放題(サブスクなし)。30名限定。',
 };
 
 // 【高速化】 毎リクエストSSR → ISR (1時間キャッシュ・Vercel CDN ヒット)
@@ -103,9 +103,9 @@ export default function BetaPage() {
 
           {/* 価格バッジ */}
           <div className="mb-6 inline-flex items-baseline gap-3 rounded-2xl border-2 border-jigen-gold bg-panel-gradient px-6 py-4 shadow-gold-glow">
-            <span className="text-[10px] uppercase tracking-widest text-jigen-gold">β1次プラン</span>
+            <span className="text-[10px] uppercase tracking-widest text-jigen-gold">試験直前ver 1次</span>
             <span className="text-4xl font-extrabold tabular-nums text-jigen-gold drop-shadow-[0_0_12px_rgba(245,196,65,0.4)]">
-              ¥980
+              ¥1,500
             </span>
             <span className="text-xs text-jigen-ink-soft">買い切り</span>
           </div>
@@ -118,20 +118,20 @@ export default function BetaPage() {
             href="/auth/signup?beta=1"
             className="group inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-gold-gradient px-10 text-lg font-extrabold text-jigen-bg-dark shadow-gold-glow-strong transition-all hover:scale-[1.03]"
           >
-            β1次プランを購入(¥980 一括)
+            試験直前ver(1次) を購入(¥1,500 一括)
             <ArrowRight aria-hidden className="h-5 w-5 transition-transform group-hover:translate-x-1" />
           </Link>
           <p className="mt-3 text-[11px] text-jigen-ink-mute">買い切り / 即日学習スタート / Stripe決済</p>
         </div>
       </section>
 
-      {/* ============ 3本柱(β版で必ず体験できるもの) ============ */}
+      {/* ============ 3本柱(試験直前verで必ず体験できるもの) ============ */}
       <section className="relative border-t border-jigen-border-soft/40 bg-jigen-bg-dark py-20">
         <div className="mx-auto w-full max-w-5xl px-6">
           <div className="mb-12 text-center">
-            <p className="mb-2 text-[10px] uppercase tracking-[0.3em] text-jigen-gold">β Features</p>
+            <p className="mb-2 text-[10px] uppercase tracking-[0.3em] text-jigen-gold">Features</p>
             <h2 className="text-2xl font-extrabold tracking-tight sm:text-4xl">
-              β版で必ず体験できる <span className="text-jigen-gold">3つの強み</span>
+              試験直前ver で必ず体験できる <span className="text-jigen-gold">3つの強み</span>
             </h2>
           </div>
 
@@ -228,20 +228,20 @@ export default function BetaPage() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-xl border-2 border-jigen-gold bg-panel-gradient p-6 text-center shadow-gold-glow">
-              <p className="text-[10px] uppercase tracking-widest text-jigen-gold">β1次プラン</p>
-              <p className="mt-2 text-4xl font-extrabold tabular-nums text-jigen-gold">¥980<span className="ml-1 text-sm font-normal text-jigen-ink-soft">買い切り</span></p>
+              <p className="text-[10px] uppercase tracking-widest text-jigen-gold">試験直前ver(1次)</p>
+              <p className="mt-2 text-4xl font-extrabold tabular-nums text-jigen-gold">¥1,500<span className="ml-1 text-sm font-normal text-jigen-ink-soft">買い切り</span></p>
               <p className="mt-1 text-[11px] text-jigen-ink-soft">2026/07/20まで使い放題</p>
             </div>
             <div className="rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-6 text-center">
-              <p className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">β2次プラン</p>
-              <p className="mt-2 text-4xl font-extrabold tabular-nums text-jigen-ink">¥1,480<span className="ml-1 text-sm font-normal text-jigen-ink-soft">買い切り</span></p>
+              <p className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">試験直前ver(2次)</p>
+              <p className="mt-2 text-4xl font-extrabold tabular-nums text-jigen-ink">¥2,000<span className="ml-1 text-sm font-normal text-jigen-ink-soft">買い切り</span></p>
               <p className="mt-1 text-[11px] text-jigen-ink-soft">2026/10/19まで使い放題</p>
-              <p className="mt-2 text-[10px] text-jigen-gold">β1次プラン購入者は ¥980 でアップグレード可能</p>
+              <p className="mt-2 text-[10px] text-jigen-gold">1次プラン購入者は ¥1,500 でアップグレード可能</p>
             </div>
           </div>
 
           <p className="mt-6 text-center text-[11px] text-jigen-ink-mute [text-wrap:balance]">
-            ※β版は買い切り(サブスクではない)。 期間内は機能全部使い放題・追加課金なし。 自動で課金が継続される仕組みは一切ありません。
+            ※試験直前verは買い切り(サブスクではない)。 期間内は機能全部使い放題・追加課金なし。 自動で課金が継続される仕組みは一切ありません。
           </p>
         </div>
       </section>
@@ -270,11 +270,11 @@ export default function BetaPage() {
             href="/auth/signup?beta=1"
             className="group inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-gold-gradient px-10 text-lg font-extrabold text-jigen-bg-dark shadow-gold-glow-strong transition-all hover:scale-[1.03] sm:px-14"
           >
-            β枠に応募する
+            試験直前ver で駆け抜ける
             <ArrowRight aria-hidden className="h-5 w-5 transition-transform group-hover:translate-x-1" />
           </Link>
           <p className="mt-4 text-[11px] text-jigen-ink-mute">
-            即日学習スタート / クレジットカード決済 / 解約はワンタップ
+            即日学習スタート / クレカ・Apple Pay・Google Pay・Link対応 / 買い切り
           </p>
         </div>
       </section>
@@ -284,7 +284,7 @@ export default function BetaPage() {
         <div className="mx-auto w-full max-w-5xl px-6">
           <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
             <div>
-              <p className="text-base font-extrabold text-jigen-gold">ジゲン β版</p>
+              <p className="text-base font-extrabold text-jigen-gold">ジゲン 試験直前ver</p>
               <p className="mt-1 text-[11px] text-jigen-ink-mute">
                 2026年7月1次試験 共闘プログラム / 限定 {BETA_LIMIT}名
               </p>
