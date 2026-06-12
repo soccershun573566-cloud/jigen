@@ -30,13 +30,16 @@ function SignupForm() {
       });
       const data = await res.json();
       if (!res.ok || !data.url) {
-        throw new Error(data?.error?.message ?? `HTTP ${res.status}`);
+        throw new Error(
+          `[HTTP ${res.status}] ${data?.error?.code ?? ''} ${data?.error?.message ?? '不明'}`,
+        );
       }
       window.location.href = data.url;
     } catch (e) {
-      // Checkout に行けない場合は、 一旦ホームへ
-      setError((e as Error).message || 'チェックアウトに失敗しました');
-      window.location.href = '/home';
+      // Checkout に行けない場合は エラーを画面表示(ホームには飛ばさない)
+      // 原因特定のため詳細を見える化
+      setError(`チェックアウトに失敗: ${(e as Error).message || '不明'}`);
+      setLoading(false);
     }
   }
 
