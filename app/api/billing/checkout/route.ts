@@ -121,9 +121,8 @@ export async function POST(req: Request) {
     if (isSubscription) {
       session = await getStripe().checkout.sessions.create({
         mode: 'subscription',
-        // 【決済手段拡張】 Stripeダッシュボードで有効化した全手段を自動表示
-        // クレカ + Apple Pay + Google Pay + Link が iPhone/Android で最適に並ぶ
-        automatic_payment_methods: { enabled: true },
+        // payment_method_types を指定しないと、 Stripeダッシュボードで有効化した
+        // 全決済手段(クレカ + Apple Pay + Google Pay + Link) が自動で表示される
         line_items: [{ price: priceId, quantity: 1 }],
         customer_email: user.email,
         client_reference_id: user.id,
@@ -141,9 +140,8 @@ export async function POST(req: Request) {
       const validUntil = (plan === 'beta_first') ? BETA_FIRST_VALID_UNTIL : BETA_SECOND_VALID_UNTIL;
       session = await getStripe().checkout.sessions.create({
         mode: 'payment',
-        // 【決済手段拡張】 Stripeダッシュボードで有効化した全手段を自動表示
-        // クレカ + Apple Pay + Google Pay + Link が iPhone/Android で最適に並ぶ
-        automatic_payment_methods: { enabled: true },
+        // payment_method_types を指定しないと、 Stripeダッシュボードで有効化した
+        // 全決済手段(クレカ + Apple Pay + Google Pay + Link) が自動で表示される
         line_items: [{ price: priceId, quantity: 1 }],
         customer_email: user.email,
         client_reference_id: user.id,
