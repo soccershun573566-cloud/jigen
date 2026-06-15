@@ -57,6 +57,119 @@ async function getUserBasic(userId: string): Promise<{
   }
 }
 
+// ============ 統計データ(現在判定/現在地/継続日数/次の復習)============
+type OverallStats = {
+  total_attempts: number;
+  total_correct: number;
+};
+type StreakRow = { streak: number };
+
+// 累計問題数+正答率(現在判定+現在地に使用)
+async function getOverallStats(userId: string): Promise<OverallStats> {
+  try {
+    const r = await db.execute(sql`
+      select count(*)::int as total_attempts,
+             count(*) filter (where is_correct = true)::int as total_correct
+      from attempts where user_id = ${userId}
+    `);
+    const rows = (r as unknown as { rows?: OverallStats[] }).rows
+      ?? (r as unknown as OverallStats[]);
+    return rows?.[0] ?? { total_attempts: 0, total_correct: 0 };
+  } catch {
+    return { total_attempts: 0, total_correct: 0 };
+  }
+}
+
+// 継続日数(JST単位)
+async function getCurrentStreak(userId: string): Promise<number> {
+  try {
+    const r = await db.execute(sql`
+      with days as (
+        select distinct (attempted_at at time zone 'Asia/Tokyo')::date as d
+        from attempts where user_id = ${userId}
+      ),
+      diffs as (
+        select d, (d - (row_number() over (order by d desc) - 1)::int)::date as anchor
+        from days
+      )
+      select count(*)::int as streak
+      from diffs
+      where anchor = (select max(anchor) from diffs)
+        and ((current_date at time zone 'Asia/Tokyo')::date - d) <= 1
+    `);
+    const rows = (r as unknown as { rows?: StreakRow[] }).rows
+      ?? (r as unknown as StreakRow[]);
+    return rows?.[0]?.streak ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+// SRS復習タイミング到来件数(「次の復習」 表示用)
+async function getSrsDueCount(userId: string): Promise<number> {
+  try {
+    const r = await db.execute(sql`
+      with attempt_seq as (
+        select question_id, is_correct, attempted_at,
+               row_number() over (partition by question_id order by attempted_at desc) as rn
+        from attempts where user_id = ${userId}
+      ),
+      last_wrong as (
+        select question_id, min(rn) as wrong_rn
+        from attempt_seq where is_correct = false
+        group by question_id
+      ),
+      streak as (
+        select s.question_id,
+               count(*) filter (
+                 where s.is_correct = true
+                   and s.rn < coalesce((select wrong_rn from last_wrong lw where lw.question_id = s.question_id), 999)
+               )::int as correct_streak,
+               max(s.attempted_at) as last_attempt
+        from attempt_seq s
+        group by s.question_id
+      )
+      select count(*)::int as c
+      from streak
+      where correct_streak >= 1
+        and (now() - last_attempt) >
+          case correct_streak
+            when 1 then interval '1 day'
+            when 2 then interval '3 days'
+            when 3 then interval '7 days'
+            when 4 then interval '14 days'
+            when 5 then interval '30 days'
+            else interval '60 days'
+          end
+    `);
+    const rows = (r as unknown as { rows?: { c: number }[] }).rows ?? (r as unknown as { c: number }[]);
+    return rows?.[0]?.c ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+// 累計正答率から判定 (S/A/B/C/D/E)
+function judgeFromAttempts(total: number, correct: number): string {
+  if (total < 10) return '—'; // データ少なすぎは表示控える
+  const pct = Math.round((correct / total) * 100);
+  if (pct >= 90) return 'S';
+  if (pct >= 80) return 'A';
+  if (pct >= 70) return 'B';
+  if (pct >= 60) return 'C';
+  if (pct >= 50) return 'D';
+  return 'E';
+}
+
+// 累計解答数から学習フェーズ判定
+function phaseFromAttempts(total: number): string {
+  if (total >= 1200) return '本試験調整期';
+  if (total >= 800)  return '模試強化期';
+  if (total >= 400)  return '得点安定期';
+  if (total >= 100)  return '苦手改善期';
+  return '基礎構築期';
+}
+
 // 1級建築施工管理技士 1次試験のデフォルト試験日(ユーザー未設定時のフォールバック)
 const DEFAULT_EXAM_DATE = '2026-07-19';
 function calcDaysLeft(examDate: string): number {
@@ -157,19 +270,25 @@ export default async function HomePage() {
   const user = await getCurrentUser();
 
   // 旧: 5本のSQLを逐次 await(RTTが5回分積み上がる)
-  // 新: 4本を並列(RTT 5 → RTT 1)。 さらに users 関連 2クエリを 1本に統合
-  const [basic, todaySolved, initialMock, specialMock] = user
+  // 新: 7本を全並列(RTT 1)。 さらに users 関連 2クエリを 1本に統合
+  const [basic, todaySolved, initialMock, specialMock, overall, streak, srsDue] = user
     ? await Promise.all([
         getUserBasic(user.id),
         getTodaySolved(user.id),
         getInitialMockStatus(user.id),
         getSpecialMock(user.id),
+        getOverallStats(user.id),
+        getCurrentStreak(user.id),
+        getSrsDueCount(user.id),
       ])
     : [
         { onboarded: true, dailyTarget: DEFAULT_TODAY_TARGET, examDate: null, daysLeft: null },
         0,
         { status: 'unstarted' as const },
         null,
+        { total_attempts: 0, total_correct: 0 },
+        0,
+        0,
       ];
 
   // オンボーディング未完了なら強制リダイレクト(ログインユーザーのみ)
@@ -186,10 +305,23 @@ export default async function HomePage() {
     ? basic.daysLeft
     : calcDaysLeft(examDate);
 
+  // 4指標を実データで上書き(mockのフォールバック値を排除)
+  const currentJudgment = judgeFromAttempts(overall.total_attempts, overall.total_correct);
+  const currentPhase = phaseFromAttempts(overall.total_attempts);
+  const nextQuiz = srsDue > 0
+    ? `忘却防止 ${srsDue}問`
+    : overall.total_attempts === 0
+      ? '初回模試から'
+      : '次の復習タイミング待ち';
+
   const data = {
     ...mock,
     examDate,
     daysLeft,
+    currentJudgment,
+    currentPhase,
+    streakDays: streak,
+    nextQuiz,
     today: {
       ...mock.today,
       totalQuestions: todayTarget,
@@ -320,9 +452,9 @@ export default async function HomePage() {
         ]}
       />
 
-      {/* 次回小テスト */}
+      {/* 次の復習(SRS忘却曲線で到来した問題数) */}
       <section
-        aria-label="次回小テスト"
+        aria-label="次の復習"
         className="flex items-center justify-between rounded-xl border border-jigen-border-soft bg-jigen-bg-panel px-4 py-3 shadow-panel"
       >
         <div className="flex items-center gap-3">
@@ -331,16 +463,16 @@ export default async function HomePage() {
           </div>
           <div>
             <p className="text-[11px] uppercase tracking-widest text-jigen-ink-mute">
-              次回小テスト
+              次の復習
             </p>
             <p className="text-sm font-semibold text-jigen-ink">{data.nextQuiz}</p>
           </div>
         </div>
         <Link
-          href="/practice"
+          href="/mastery"
           className="text-xs font-semibold text-jigen-gold underline-offset-4 hover:underline"
         >
-          予定を見る
+          分析を見る
         </Link>
       </section>
 
