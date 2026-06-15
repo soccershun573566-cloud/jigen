@@ -2,6 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["hnd1"],
   "framework": "nextjs",
+  "functions": {
+    "app/api/**/route.ts": {
+      "memory": 1024,
+      "maxDuration": 30
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/generate-daily-tasks",

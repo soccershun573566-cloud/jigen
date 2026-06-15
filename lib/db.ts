@@ -20,9 +20,20 @@ function createDb(): DrizzleDb {
     throw new Error('DATABASE_URL missing');
   }
   if (!globalForDb._pgClient) {
+    // 【100人スケール対応】 Vercel Functions + Supabase Pooler のベストプラクティス
+    // - max: 1 ← 各invocationで1接続だけ持つ(同時起動増えてもPooler枯渇しない)
+    //   Supabase Transaction Pooler は1接続を効率的に再利用するため、 これで十分高速
+    //   Vercel公式ガイドも postgres-js + Supabase Pooler では max:1 を推奨
+    // - prepare: false ← Supabase Transaction Pooler は prepared statements 非対応
+    // - idle_timeout: 20 ← 20秒アイドルで切断(リソース節約)
+    // - connect_timeout: 10 ← 10秒で接続タイムアウト(ヘルスチェック)
+    // - max_lifetime: 60 * 30 ← 30分で接続再生成(長寿命接続のメモリリーク防止)
     globalForDb._pgClient = postgres(connectionString, {
       prepare: false,
-      max: 10,
+      max: 1,
+      idle_timeout: 20,
+      connect_timeout: 10,
+      max_lifetime: 60 * 30,
     });
   }
   return drizzle(globalForDb._pgClient, { schema });

@@ -189,13 +189,6 @@ export async function POST(req: Request) {
         masteryP: newP,
       },
       nextRecommendation,
-      // 一時デバッグ情報(原因特定後に削除)
-      _debug: {
-        rawUserAnswer: userAnswer,
-        rawCorrectAnswer: question.answer,
-        normalizedUser: normalizeAnswer(userAnswer),
-        normalizedCorrect: normalizeAnswer(question.answer),
-      },
     });
   } catch (err) {
     if (err instanceof Response) return err;
