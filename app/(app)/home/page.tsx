@@ -105,6 +105,67 @@ async function getCurrentStreak(userId: string): Promise<number> {
   }
 }
 
+// 今週の金曜小テスト状態(ホームバナー用)
+type WeeklyTestStatus = {
+  status: 'upcoming' | 'available' | 'in_progress' | 'completed' | 'no_data';
+  daysToFriday: number;
+  score?: number;
+  total?: number;
+};
+async function getWeeklyTestStatus(userId: string): Promise<WeeklyTestStatus> {
+  try {
+    // 月曜の日付(JST)
+    const now = new Date();
+    const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    const day = jst.getUTCDay(); // 0=日,1=月,...,6=土
+    const diff = day === 0 ? -6 : 1 - day;
+    const monday = new Date(jst);
+    monday.setUTCDate(jst.getUTCDate() + diff);
+    const mondayStr = monday.toISOString().slice(0, 10);
+    const daysToFriday = day >= 1 && day <= 4 ? (5 - day) : 0;
+    const isOpen = day === 5 || day === 6 || day === 0;
+
+    // 直近7日の attempts 数(no_data 判定用)
+    // と 今週の weekly_test_attempts を 1回で並列取得
+    const [recentR, weeklyR] = await Promise.all([
+      db.execute(sql`
+        select count(*)::int as c from attempts
+        where user_id = ${userId}::uuid
+          and attempted_at >= now() - interval '7 days'
+      `).catch(() => null),
+      db.execute(sql`
+        select score, jsonb_array_length(question_ids) as total, completed_at
+        from weekly_test_attempts
+        where user_id = ${userId}::uuid and week_start = ${mondayStr}::date
+        limit 1
+      `).catch(() => null),
+    ]);
+
+    const recentRows = recentR
+      ? ((recentR as unknown as { rows?: { c: number }[] }).rows ?? (recentR as unknown as { c: number }[]))
+      : [];
+    const recentCount = recentRows?.[0]?.c ?? 0;
+
+    const weeklyRows = weeklyR
+      ? ((weeklyR as unknown as { rows?: Array<{ score: number | null; total: number; completed_at: string | null }> }).rows
+          ?? (weeklyR as unknown as Array<{ score: number | null; total: number; completed_at: string | null }>))
+      : [];
+    const weekly = weeklyRows?.[0];
+
+    if (weekly?.completed_at) {
+      return { status: 'completed', daysToFriday, score: weekly.score ?? 0, total: weekly.total };
+    }
+    if (weekly && !weekly.completed_at) {
+      return { status: 'in_progress', daysToFriday };
+    }
+    if (!isOpen) return { status: 'upcoming', daysToFriday };
+    if (recentCount === 0) return { status: 'no_data', daysToFriday };
+    return { status: 'available', daysToFriday };
+  } catch {
+    return { status: 'upcoming', daysToFriday: 0 };
+  }
+}
+
 // SRS復習タイミング到来件数(「次の復習」 表示用)
 async function getSrsDueCount(userId: string): Promise<number> {
   try {
@@ -270,8 +331,8 @@ export default async function HomePage() {
   const user = await getCurrentUser();
 
   // 旧: 5本のSQLを逐次 await(RTTが5回分積み上がる)
-  // 新: 7本を全並列(RTT 1)。 さらに users 関連 2クエリを 1本に統合
-  const [basic, todaySolved, initialMock, specialMock, overall, streak, srsDue] = user
+  // 新: 8本を全並列(RTT 1)。 さらに users 関連 2クエリを 1本に統合
+  const [basic, todaySolved, initialMock, specialMock, overall, streak, srsDue, weeklyTest] = user
     ? await Promise.all([
         getUserBasic(user.id),
         getTodaySolved(user.id),
@@ -280,6 +341,7 @@ export default async function HomePage() {
         getOverallStats(user.id),
         getCurrentStreak(user.id),
         getSrsDueCount(user.id),
+        getWeeklyTestStatus(user.id),
       ])
     : [
         { onboarded: true, dailyTarget: DEFAULT_TODAY_TARGET, examDate: null, daysLeft: null },
@@ -289,6 +351,7 @@ export default async function HomePage() {
         { total_attempts: 0, total_correct: 0 },
         0,
         0,
+        { status: 'upcoming' as const, daysToFriday: 0 },
       ];
 
   // オンボーディング未完了なら強制リダイレクト(ログインユーザーのみ)
@@ -380,6 +443,67 @@ export default async function HomePage() {
 
       {/* 今日の問題(メイン) */}
       <TodayQuestionCard today={data.today} />
+
+      {/* 金曜小テストバナー(状態に応じて表示) */}
+      {weeklyTest.status === 'completed' && weeklyTest.score !== undefined ? (
+        <Link
+          href="/weekly-test"
+          className="mb-3 flex items-center justify-between rounded-xl border border-jigen-gold/30 bg-jigen-bg-panel/60 px-4 py-3 text-xs text-jigen-ink-soft hover:border-jigen-gold/60"
+        >
+          <span className="inline-flex items-center gap-2">
+            <Check aria-hidden className="h-3.5 w-3.5 text-emerald-400" />
+            今週の金曜小テスト 完了 — スコア: <span className="font-bold text-jigen-gold">{weeklyTest.score}/{weeklyTest.total}問</span>
+          </span>
+          <span className="inline-flex items-center gap-1 text-jigen-gold">
+            結果を見る <ArrowRight aria-hidden className="h-3 w-3" />
+          </span>
+        </Link>
+      ) : weeklyTest.status === 'available' || weeklyTest.status === 'in_progress' ? (
+        <Link
+          href="/weekly-test"
+          className="group mb-3 block rounded-2xl border-2 border-jigen-gold bg-panel-gradient p-5 shadow-gold-glow transition-transform hover:scale-[1.01]"
+        >
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-jigen-bg-dark">
+              <Sparkles aria-hidden className="h-6 w-6" />
+            </div>
+            <div className="flex-1">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-jigen-gold">
+                Weekly Test
+              </p>
+              <p className="text-base font-bold text-jigen-ink sm:text-lg">
+                {weeklyTest.status === 'in_progress'
+                  ? '金曜小テストの続きから(25問)'
+                  : '今週の金曜小テスト 開催中(25問)'}
+              </p>
+              <p className="mt-1 text-xs text-jigen-ink-soft">
+                {weeklyTest.status === 'in_progress'
+                  ? '進捗は保存されています。続きから再開できます。'
+                  : '直近7日の解答から正解13問+間違え12問。 学習の定着を確認しましょう。'}
+              </p>
+            </div>
+            <ArrowRight aria-hidden className="h-5 w-5 shrink-0 text-jigen-gold transition-transform group-hover:translate-x-1" />
+          </div>
+        </Link>
+      ) : weeklyTest.status === 'upcoming' && weeklyTest.daysToFriday > 0 ? (
+        <Link
+          href="/weekly-test"
+          className="mb-3 block rounded-2xl border border-jigen-gold/40 bg-jigen-bg-panel/80 p-4 transition-colors hover:border-jigen-gold"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-jigen-gold/15 text-jigen-gold">
+              <Clock aria-hidden className="h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <p className="text-[10px] uppercase tracking-widest text-jigen-gold">次の金曜小テスト</p>
+              <p className="text-sm font-bold text-jigen-ink">
+                開催まで <span className="text-jigen-gold">{weeklyTest.daysToFriday}日</span>(毎週金曜0時開始)
+              </p>
+            </div>
+            <ArrowRight aria-hidden className="h-4 w-4 shrink-0 text-jigen-gold" />
+          </div>
+        </Link>
+      ) : null}
 
       {/* 特別模試バナー(DB連動・期間判定) */}
       {specialMock && specialMock.attempt_status !== 'completed' ? (
