@@ -12,6 +12,7 @@ import { db } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 const Request = z.object({
+  displayName: z.string().max(30).optional(),
   attemptHistory: z.enum(['first', 'failed_once', 'failed_multi']),
   weekdayMinutes: z.number().int().min(5).max(240),
   weekendMinutes: z.number().int().min(5).max(480),
@@ -31,9 +32,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: { code: 'validation_error', message: parsed.error.message } }, { status: 400 });
     }
     const d = parsed.data;
+    // displayName は空文字 or 未入力なら既存値を維持(COALESCE)
+    const trimmedName = d.displayName?.trim();
+    const displayName = trimmedName && trimmedName.length > 0 ? trimmedName : null;
 
     await db.execute(sql`
       update users set
+        display_name = coalesce(${displayName}, display_name),
         attempt_history = ${d.attemptHistory},
         weekday_minutes = ${d.weekdayMinutes},
         weekend_minutes = ${d.weekendMinutes},

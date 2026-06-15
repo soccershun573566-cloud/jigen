@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { clearPracticeQueue } from '@/lib/practice/queue';
 
 type Form = {
+  displayName: string;
   attemptHistory: 'first' | 'failed_once' | 'failed_multi' | '';
   weekdayMinutes: number;
   weekendMinutes: number;
@@ -48,6 +49,7 @@ export default function OnboardingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [form, setForm] = useState<Form>({
+    displayName: '',
     attemptHistory: '',
     weekdayMinutes: 30,
     weekendMinutes: 60,
@@ -60,6 +62,12 @@ export default function OnboardingPage() {
   });
 
   const steps = [
+    {
+      key: 'name',
+      title: 'なんてお呼びすればいい?',
+      sub: '本名でもニックネームでもOK。 ティラノ先生がここで呼びかけます',
+      valid: true, // 任意(空でも次へ進める)
+    },
     {
       key: 'attempt',
       title: 'これまでの受験経験は?',
@@ -161,7 +169,26 @@ export default function OnboardingPage() {
         <h2 className="mb-2 text-xl font-extrabold tracking-tight text-jigen-ink">{current.title}</h2>
         <p className="mb-5 text-xs text-jigen-ink-soft">{current.sub}</p>
 
-        {/* Step 0: 受験経験 */}
+        {/* Step 0: お名前/ニックネーム */}
+        {current.key === 'name' && (
+          <div className="space-y-3">
+            <input
+              type="text"
+              value={form.displayName}
+              onChange={(e) => setForm({ ...form, displayName: e.target.value.slice(0, 30) })}
+              maxLength={30}
+              placeholder="例) しゅんすけ、 たかし、 ティラノ大好き"
+              autoComplete="nickname"
+              className="w-full rounded-lg border border-jigen-border-soft bg-jigen-bg-dark px-4 py-3 text-base text-white placeholder:text-jigen-ink-mute focus:border-jigen-gold focus:outline-none"
+            />
+            <p className="text-[11px] text-jigen-ink-mute">
+              入力しないでも進めます(その時は「あなた」と呼びかけます)。<br />
+              後で設定からいつでも変更できます。 30文字まで。
+            </p>
+          </div>
+        )}
+
+        {/* Step 1: 受験経験 */}
         {current.key === 'attempt' && (
           <div className="grid gap-2">
             {([
