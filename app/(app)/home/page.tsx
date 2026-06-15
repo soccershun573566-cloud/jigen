@@ -231,6 +231,23 @@ function phaseFromAttempts(total: number): string {
   return '基礎構築期';
 }
 
+// ヘルメット階級判定(解答数+正答率)
+// 成長記録としてサイドバー下部に表示。 「見習い」 から始まり、 量と質の両方が伸びると上がる
+function helmetRankFromAttempts(total: number, correct: number): string {
+  if (total < 50) return '見習い';
+  const pct = Math.round((correct / total) * 100);
+  // ダイヤモンド: 1200問+80%以上
+  if (total >= 1200 && pct >= 80) return 'ダイヤモンド';
+  // プラチナ: 800問+75%以上
+  if (total >= 800 && pct >= 75) return 'プラチナ';
+  // ゴールド: 400問+70%以上
+  if (total >= 400 && pct >= 70) return 'ゴールド';
+  // シルバー: 100問+60%以上 or 400問+50%以上
+  if ((total >= 100 && pct >= 60) || (total >= 400 && pct >= 50)) return 'シルバー';
+  // ブロンズ: それ以外(50問以上は到達済)
+  return 'ブロンズ';
+}
+
 // 1級建築施工管理技士 1次試験のデフォルト試験日(ユーザー未設定時のフォールバック)
 const DEFAULT_EXAM_DATE = '2026-07-19';
 function calcDaysLeft(examDate: string): number {
@@ -376,6 +393,8 @@ export default async function HomePage() {
     : overall.total_attempts === 0
       ? '初回模試から'
       : '次の復習タイミング待ち';
+  // 成長記録: ヘルメット階級(解答数+正答率) + 継続日数
+  const helmetRank = helmetRankFromAttempts(overall.total_attempts, overall.total_correct);
 
   const data = {
     ...mock,
@@ -385,6 +404,10 @@ export default async function HomePage() {
     currentPhase,
     streakDays: streak,
     nextQuiz,
+    growth: {
+      helmetRank,
+      streakDays: streak,
+    },
     today: {
       ...mock.today,
       totalQuestions: todayTarget,
