@@ -12,6 +12,7 @@ import { AiCommentCard } from '@/components/home/v2/AiCommentCard';
 import { BottomBanners, BottomBannersSkeleton } from '@/components/home/v2/BottomBanners';
 import { getCurrentUser } from '@/lib/auth/session';
 import { db } from '@/lib/db';
+import { generateHomeCoachComment } from '@/lib/coach';
 
 // 採点後にホームに戻ったら最新の進捗を反映するため動的レンダリング
 export const dynamic = 'force-dynamic';
@@ -20,16 +21,17 @@ export const revalidate = 0;
 const DEFAULT_TODAY_TARGET = 25; // フォールバック値(users.daily_target_questions が無い場合)
 
 // 旧: getDailyTarget と isOnboarded を別クエリで2回users取得 → DB往復2回
-// 新: 1本に統合 → DB往復1回(RTT 半分)+ target_exam_date も同時取得
+// 新: 1本に統合 → DB往復1回(RTT 半分)+ target_exam_date + display_name も同時取得
 async function getUserBasic(userId: string): Promise<{
   onboarded: boolean;
   dailyTarget: number;
   examDate: string | null;
   daysLeft: number | null;
+  displayName: string;
 }> {
   try {
     const r = await db.execute(sql`
-      select onboarded_at, daily_target_questions,
+      select onboarded_at, daily_target_questions, display_name, email,
              to_char(target_exam_date, 'YYYY-MM-DD') as exam_date,
              (target_exam_date - current_date)::int as days_left
       from users where id = ${userId} limit 1
@@ -37,25 +39,56 @@ async function getUserBasic(userId: string): Promise<{
     const rows = (r as unknown as { rows?: Array<{
       onboarded_at: string | null;
       daily_target_questions: number | null;
+      display_name: string | null;
+      email: string | null;
       exam_date: string | null;
       days_left: number | null;
     }> }).rows
       ?? (r as unknown as Array<{
         onboarded_at: string | null;
         daily_target_questions: number | null;
+        display_name: string | null;
+        email: string | null;
         exam_date: string | null;
         days_left: number | null;
       }>);
     const row = rows?.[0];
     const v = row?.daily_target_questions;
+    const name = row?.display_name?.trim() || row?.email?.split('@')[0] || '';
     return {
       onboarded: !!row?.onboarded_at,
       dailyTarget: typeof v === 'number' && v > 0 ? v : DEFAULT_TODAY_TARGET,
       examDate: row?.exam_date ?? null,
       daysLeft: typeof row?.days_left === 'number' ? row.days_left : null,
+      displayName: name,
     };
   } catch {
-    return { onboarded: false, dailyTarget: DEFAULT_TODAY_TARGET, examDate: null, daysLeft: null };
+    return { onboarded: false, dailyTarget: DEFAULT_TODAY_TARGET, examDate: null, daysLeft: null, displayName: '' };
+  }
+}
+
+// 弱点教科を1件取得(5問以上挑戦した中で最低正答率)
+async function getWeakestSection(userId: string): Promise<{ section: string; pct: number } | null> {
+  try {
+    const r = await db.execute(sql`
+      select q.section,
+             (count(*) filter (where a.is_correct = true)::float / nullif(count(*)::float, 0)) as ratio
+      from attempts a
+      join questions q on q.id = a.question_id
+      where a.user_id = ${userId}::uuid
+      group by q.section
+      having count(*) >= 5
+      order by ratio asc nulls first
+      limit 1
+    `);
+    const rows = (r as unknown as { rows?: Array<{ section: string; ratio: number | null }> }).rows
+      ?? (r as unknown as Array<{ section: string; ratio: number | null }>);
+    const row = rows?.[0];
+    if (!row) return null;
+    const ratio = row.ratio ?? 0;
+    return { section: row.section, pct: Math.round(ratio * 100) };
+  } catch {
+    return null;
   }
 }
 
@@ -245,10 +278,10 @@ export default async function HomePage() {
   const mock = getHomeV2();
   const user = await getCurrentUser();
 
-  // 【Streaming SSR】 親で取得する軽量データのみ(6本並列・RTT 1)
+  // 【Streaming SSR】 親で取得する軽量データのみ(7本並列・RTT 1)
   // 重い特別模試/金曜小テストは BottomBanners が Suspense で後から取得
   // → ホーム上半分(試験日・今日の問題・3カラム) が先に表示、 下半分は streaming で埋まる
-  const [basic, todaySolved, initialMock, overall, streak, srsDue] = user
+  const [basic, todaySolved, initialMock, overall, streak, srsDue, weakestSection] = user
     ? await Promise.all([
         getUserBasic(user.id),
         getTodaySolved(user.id),
@@ -256,14 +289,16 @@ export default async function HomePage() {
         getOverallStats(user.id),
         getCurrentStreak(user.id),
         getSrsDueCount(user.id),
+        getWeakestSection(user.id),
       ])
     : [
-        { onboarded: true, dailyTarget: DEFAULT_TODAY_TARGET, examDate: null, daysLeft: null },
+        { onboarded: true, dailyTarget: DEFAULT_TODAY_TARGET, examDate: null, daysLeft: null, displayName: '' },
         0,
         { status: 'unstarted' as const },
         { total_attempts: 0, total_correct: 0 },
         0,
         0,
+        null,
       ];
 
   // オンボーディング未完了なら強制リダイレクト(ログインユーザーのみ)
@@ -291,6 +326,20 @@ export default async function HomePage() {
   // 成長記録: ヘルメット階級(解答数+正答率) + 継続日数
   const helmetRank = helmetRankFromAttempts(overall.total_attempts, overall.total_correct);
 
+  // ティラノ先生コメント(寄り添うトーン・実データ反映)
+  const coach = generateHomeCoachComment({
+    totalAttempts: overall.total_attempts,
+    totalCorrect: overall.total_correct,
+    todaySolved,
+    todayTarget,
+    streakDays: streak,
+    daysToExam: daysLeft,
+    srsDueCount: srsDue,
+    weakestSection,
+    displayName: basic.displayName,
+    currentJudgment,
+  });
+
   const data = {
     ...mock,
     examDate,
@@ -299,6 +348,8 @@ export default async function HomePage() {
     currentPhase,
     streakDays: streak,
     nextQuiz,
+    aiComment: coach.comment,
+    warning: coach.warning,
     growth: {
       helmetRank,
       streakDays: streak,

@@ -15,6 +15,7 @@ import {
 import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth/session';
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
+import { generateReviewCoachComment } from '@/lib/coach';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -400,7 +401,7 @@ export default async function ReviewPage() {
         )}
       </section>
 
-      {/* 6. ティラノ先生コメント */}
+      {/* 6. ティラノ先生コメント(寄り添うトーン・実データ反映) */}
       <section className="mb-6 rounded-2xl border border-jigen-gold/30 bg-panel-gradient p-5 shadow-panel">
         <div className="flex items-start gap-3">
           <TiranoSensei size="md" glow />
@@ -409,11 +410,19 @@ export default async function ReviewPage() {
               ティラノ先生から
             </p>
             <p className="mt-1 text-sm font-medium leading-relaxed text-jigen-ink">
-              {overall.total_attempts === 0
-                ? 'まずは1問。 ここに足跡が積もるのが、 一番の励みになりますよ。'
-                : overall.study_days >= 7
-                  ? `${overall.study_days}日も続けてきましたね。 累計${overall.total_attempts}問、 正答率${accuracyPct}%。 確実に前に進んでいます。`
-                  : `${overall.total_attempts}問のチャレンジ、 確認しました。 1日1問でも続ければ、 30日後には景色が変わっています。`}
+              {generateReviewCoachComment({
+                totalAttempts: overall.total_attempts,
+                totalCorrect: overall.total_correct,
+                todaySolved: 0,
+                todayTarget: 0,
+                streakDays: 0,
+                daysToExam: null,
+                srsDueCount: 0,
+                weakestSection: null,
+                displayName: '',
+                studyDays: overall.study_days,
+                journeyDays,
+              })}
             </p>
           </div>
         </div>

@@ -15,6 +15,7 @@ import {
 import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth/session';
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
+import { generateMasteryCoachComment } from '@/lib/coach';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -403,7 +404,7 @@ export default async function MasteryPage() {
         )}
       </section>
 
-      {/* 6. ティラノ先生コメント */}
+      {/* 6. ティラノ先生コメント(寄り添うトーン・実データ反映) */}
       <section className="mb-6 rounded-2xl border border-jigen-gold/30 bg-panel-gradient p-5 shadow-panel">
         <div className="flex items-start gap-3">
           <TiranoSensei size="md" glow />
@@ -412,11 +413,18 @@ export default async function MasteryPage() {
               ティラノ先生の分析
             </p>
             <p className="mt-1 text-sm font-medium leading-relaxed text-jigen-ink">
-              {totalAttempts === 0
-                ? '問題を解くと、 ここに教科別の現在地と次の打ち手が表示されます。'
-                : weakestSection
-                  ? `現在「${strategy.phaseLabel}」。 最弱は「${weakestSection.section}」 (${weakestSection.pct}%)。 出題エンジンが自動でここの比率を上げています。`
-                  : `現在「${strategy.phaseLabel}」。 累計${totalAttempts}問、 正答率${overallPct}%。 引き続き続けていきましょう。`}
+              {generateMasteryCoachComment({
+                totalAttempts,
+                totalCorrect,
+                todaySolved: 0,
+                todayTarget: 0,
+                streakDays: 0,
+                daysToExam: strategy.daysLeft,
+                srsDueCount: 0,
+                weakestSection: weakestSection ?? null,
+                displayName: '',
+                phase: strategy.phaseLabel,
+              })}
             </p>
           </div>
         </div>

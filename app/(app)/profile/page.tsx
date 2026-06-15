@@ -28,6 +28,7 @@ import { TiranoSensei } from '@/components/mascot/TiranoSensei';
 import { NicknameEditor } from '@/components/profile/NicknameEditor';
 import { AvatarEditor } from '@/components/profile/AvatarEditor';
 import { PreferencesEditor } from '@/components/profile/PreferencesEditor';
+import { generateProfileCoachComment } from '@/lib/coach';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -704,7 +705,7 @@ export default async function ProfilePage() {
         </div>
       </section>
 
-      {/* ティラノ先生コメント */}
+      {/* ティラノ先生コメント(寄り添うトーン・実データ反映) */}
       <section className="mb-4 rounded-xl border border-jigen-gold/30 bg-panel-gradient p-4 shadow-panel">
         <div className="flex items-start gap-3">
           <TiranoSensei size="md" glow />
@@ -712,11 +713,19 @@ export default async function ProfilePage() {
             <p className="text-[11px] font-semibold uppercase tracking-widest text-jigen-gold">
               ティラノ先生からのコメント
             </p>
-            <p className="mt-1 text-sm leading-relaxed text-jigen-ink-soft">
-              {sections.length === 0
-                ? `${profile.display_name ?? 'あなた'}さん、ようこそ。
-まずは1問解いてみましょう。続けるほどに、ここに分析が積み上がっていきます。`
-                : `現在「${phase.label}」です。総正答率 ${overallPct}% / 継続 ${streak}日。このペースを維持できれば、上の判定への安定が見えてきますよ。引き続き、一緒にがんばりましょう。`}
+            <p className="mt-1 text-sm leading-relaxed text-jigen-ink">
+              {generateProfileCoachComment({
+                totalAttempts: overall.total_attempts,
+                totalCorrect: overall.total_correct,
+                todaySolved: 0,
+                todayTarget: 0,
+                streakDays: streak,
+                daysToExam: strategy.daysLeft,
+                srsDueCount: strategy.srsDueCount,
+                weakestSection: strategy.weakestSection ? { section: strategy.weakestSection.section, pct: strategy.weakestSection.pct } : null,
+                displayName: profile.display_name ?? profile.email?.split('@')[0] ?? '',
+                phase: phase.label,
+              })}
             </p>
           </div>
         </div>
