@@ -153,17 +153,45 @@ async function getMockHistory(userId: string): Promise<MockHistoryRow[]> {
   }
 }
 
+type WeeklyTestHistoryRow = {
+  week_start: string;
+  score: number | null;
+  total: number;
+  completed_at: string | null;
+  started_at: string;
+};
+async function getWeeklyTestHistory(userId: string): Promise<WeeklyTestHistoryRow[]> {
+  try {
+    const r = await db.execute(sql`
+      select to_char(week_start, 'YYYY-MM-DD') as week_start,
+             score,
+             jsonb_array_length(question_ids) as total,
+             to_char(completed_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as completed_at,
+             to_char(started_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as started_at
+      from weekly_test_attempts
+      where user_id = ${userId}
+      order by week_start desc
+      limit 12
+    `);
+    const rows = (r as unknown as { rows?: WeeklyTestHistoryRow[] }).rows ?? (r as unknown as WeeklyTestHistoryRow[]);
+    return rows ?? [];
+  } catch {
+    return [];
+  }
+}
+
 // ====================== ページ本体 ======================
 export default async function ReviewPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/auth/login');
 
-  const [overall, daily28, daily14, recent, mockHistory] = await Promise.all([
+  const [overall, daily28, daily14, recent, mockHistory, weeklyHistory] = await Promise.all([
     getOverall(user.id),
     getDaily(user.id, 28),
     getDaily(user.id, 14),
     getRecent(user.id),
     getMockHistory(user.id),
+    getWeeklyTestHistory(user.id),
   ]);
 
   const accuracyPct = pct(overall.total_correct, overall.total_attempts);
@@ -265,6 +293,37 @@ export default async function ReviewPage() {
           </div>
         )}
       </section>
+
+      {/* 金曜小テスト履歴 */}
+      {weeklyHistory.length > 0 ? (
+        <section className="mb-6 rounded-2xl border border-jigen-border-soft bg-jigen-bg-panel p-5 shadow-panel">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-jigen-gold">
+            <Sparkles className="h-4 w-4" />金曜小テスト履歴
+          </h2>
+          <ul className="space-y-2">
+            {weeklyHistory.map((w) => {
+              const acc = w.score != null && w.total > 0 ? Math.round((w.score / w.total) * 100) : null;
+              return (
+                <li key={w.week_start} className="rounded-lg border border-jigen-border-soft bg-jigen-bg-dark p-3">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="text-sm font-semibold text-jigen-ink">{fmtJa(w.week_start)} 週</p>
+                    {w.completed_at ? (
+                      <span className="rounded-full bg-jigen-gold/15 px-2 py-0.5 text-[10px] font-bold text-jigen-gold">完了</span>
+                    ) : (
+                      <span className="rounded-full bg-jigen-bg-panel-2 px-2 py-0.5 text-[10px] font-bold text-jigen-ink-mute">中断</span>
+                    )}
+                  </div>
+                  {w.score != null ? (
+                    <p className="mt-1 text-[11px] text-jigen-ink-soft">
+                      スコア: <span className="font-bold text-jigen-gold">{w.score}/{w.total}問</span>{acc != null && ` (${acc}%)`}
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
 
       {/* 4. 模試の受験履歴 */}
       {mockHistory.length > 0 ? (
