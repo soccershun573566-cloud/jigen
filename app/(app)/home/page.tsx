@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ArrowRight, Brain, Check, Clock, Sparkles } from 'lucide-react';
@@ -8,6 +9,7 @@ import { TodayQuestionCard } from '@/components/home/v2/TodayQuestionCard';
 import { ExamMockCard } from '@/components/home/v2/ExamMockCard';
 import { StatTriple } from '@/components/home/v2/StatTriple';
 import { AiCommentCard } from '@/components/home/v2/AiCommentCard';
+import { BottomBanners, BottomBannersSkeleton } from '@/components/home/v2/BottomBanners';
 import { getCurrentUser } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 
@@ -105,67 +107,6 @@ async function getCurrentStreak(userId: string): Promise<number> {
   }
 }
 
-// 今週の金曜小テスト状態(ホームバナー用)
-type WeeklyTestStatus = {
-  status: 'upcoming' | 'available' | 'in_progress' | 'completed' | 'no_data';
-  daysToFriday: number;
-  score?: number;
-  total?: number;
-};
-async function getWeeklyTestStatus(userId: string): Promise<WeeklyTestStatus> {
-  try {
-    // 月曜の日付(JST)
-    const now = new Date();
-    const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-    const day = jst.getUTCDay(); // 0=日,1=月,...,6=土
-    const diff = day === 0 ? -6 : 1 - day;
-    const monday = new Date(jst);
-    monday.setUTCDate(jst.getUTCDate() + diff);
-    const mondayStr = monday.toISOString().slice(0, 10);
-    const daysToFriday = day >= 1 && day <= 4 ? (5 - day) : 0;
-    const isOpen = day === 5 || day === 6 || day === 0;
-
-    // 直近7日の attempts 数(no_data 判定用)
-    // と 今週の weekly_test_attempts を 1回で並列取得
-    const [recentR, weeklyR] = await Promise.all([
-      db.execute(sql`
-        select count(*)::int as c from attempts
-        where user_id = ${userId}::uuid
-          and attempted_at >= now() - interval '7 days'
-      `).catch(() => null),
-      db.execute(sql`
-        select score, jsonb_array_length(question_ids) as total, completed_at
-        from weekly_test_attempts
-        where user_id = ${userId}::uuid and week_start = ${mondayStr}::date
-        limit 1
-      `).catch(() => null),
-    ]);
-
-    const recentRows = recentR
-      ? ((recentR as unknown as { rows?: { c: number }[] }).rows ?? (recentR as unknown as { c: number }[]))
-      : [];
-    const recentCount = recentRows?.[0]?.c ?? 0;
-
-    const weeklyRows = weeklyR
-      ? ((weeklyR as unknown as { rows?: Array<{ score: number | null; total: number; completed_at: string | null }> }).rows
-          ?? (weeklyR as unknown as Array<{ score: number | null; total: number; completed_at: string | null }>))
-      : [];
-    const weekly = weeklyRows?.[0];
-
-    if (weekly?.completed_at) {
-      return { status: 'completed', daysToFriday, score: weekly.score ?? 0, total: weekly.total };
-    }
-    if (weekly && !weekly.completed_at) {
-      return { status: 'in_progress', daysToFriday };
-    }
-    if (!isOpen) return { status: 'upcoming', daysToFriday };
-    if (recentCount === 0) return { status: 'no_data', daysToFriday };
-    return { status: 'available', daysToFriday };
-  } catch {
-    return { status: 'upcoming', daysToFriday: 0 };
-  }
-}
-
 // SRS復習タイミング到来件数(「次の復習」 表示用)
 async function getSrsDueCount(userId: string): Promise<number> {
   try {
@@ -256,51 +197,8 @@ function calcDaysLeft(examDate: string): number {
   return Math.max(0, Math.ceil((t - now) / (24 * 60 * 60 * 1000)));
 }
 
-// 期間限定の特別模試(初回模試以外)を1件取得
-type SpecialMockRow = {
-  id: string;
-  title: string;
-  description: string | null;
-  questions_count: number;
-  available_from: string | null;
-  available_until: string | null;
-  status: 'open' | 'upcoming' | 'closed';
-  days_to_open: number;
-  attempt_status: 'unstarted' | 'in_progress' | 'completed';
-};
-async function getSpecialMock(userId: string): Promise<SpecialMockRow | null> {
-  try {
-    const r = await db.execute(sql`
-      with exams as (
-        select id, title, description, questions_count, available_from, available_until,
-               case
-                 when (available_from is null or now() >= available_from)
-                  and (available_until is null or now() <= available_until) then 'open'
-                 when available_from is not null and now() < available_from then 'upcoming'
-                 else 'closed'
-               end as status,
-               case when available_from is not null
-                    then ceil(extract(epoch from (available_from - now())) / 86400)::int
-                    else 0 end as days_to_open
-        from mock_exams
-        where is_active = true and id != 'initial-50'
-      )
-      select e.*,
-             case when ma.completed_at is not null then 'completed'
-                  when ma.id is not null then 'in_progress'
-                  else 'unstarted' end as attempt_status
-      from exams e
-      left join mock_attempts ma on ma.mock_exam_id = e.id and ma.user_id = ${userId}::uuid
-      where e.status in ('open', 'upcoming')
-      order by case e.status when 'open' then 0 else 1 end, e.available_from nulls last
-      limit 1
-    `);
-    const rows = (r as unknown as { rows?: SpecialMockRow[] }).rows ?? (r as unknown as SpecialMockRow[]);
-    return rows?.[0] ?? null;
-  } catch {
-    return null;
-  }
-}
+// 期間限定の特別模試 / 金曜小テスト の取得は lib/home-data.ts に移動済
+// (BottomBanners 子コンポーネントが Suspense で後から取得・ストリーミング)
 
 type InitialMockStatus = 'unstarted' | 'in_progress' | 'completed';
 async function getInitialMockStatus(userId: string): Promise<{ status: InitialMockStatus; score?: number; total?: number }> {
@@ -347,28 +245,25 @@ export default async function HomePage() {
   const mock = getHomeV2();
   const user = await getCurrentUser();
 
-  // 旧: 5本のSQLを逐次 await(RTTが5回分積み上がる)
-  // 新: 8本を全並列(RTT 1)。 さらに users 関連 2クエリを 1本に統合
-  const [basic, todaySolved, initialMock, specialMock, overall, streak, srsDue, weeklyTest] = user
+  // 【Streaming SSR】 親で取得する軽量データのみ(6本並列・RTT 1)
+  // 重い特別模試/金曜小テストは BottomBanners が Suspense で後から取得
+  // → ホーム上半分(試験日・今日の問題・3カラム) が先に表示、 下半分は streaming で埋まる
+  const [basic, todaySolved, initialMock, overall, streak, srsDue] = user
     ? await Promise.all([
         getUserBasic(user.id),
         getTodaySolved(user.id),
         getInitialMockStatus(user.id),
-        getSpecialMock(user.id),
         getOverallStats(user.id),
         getCurrentStreak(user.id),
         getSrsDueCount(user.id),
-        getWeeklyTestStatus(user.id),
       ])
     : [
         { onboarded: true, dailyTarget: DEFAULT_TODAY_TARGET, examDate: null, daysLeft: null },
         0,
         { status: 'unstarted' as const },
-        null,
         { total_attempts: 0, total_correct: 0 },
         0,
         0,
-        { status: 'upcoming' as const, daysToFriday: 0 },
       ];
 
   // オンボーディング未完了なら強制リダイレクト(ログインユーザーのみ)
@@ -467,111 +362,11 @@ export default async function HomePage() {
       {/* 今日の問題(メイン) */}
       <TodayQuestionCard today={data.today} />
 
-      {/* 金曜小テストバナー(状態に応じて表示) */}
-      {weeklyTest.status === 'completed' && weeklyTest.score !== undefined ? (
-        <Link
-          href="/weekly-test"
-          className="mb-3 flex items-center justify-between rounded-xl border border-jigen-gold/30 bg-jigen-bg-panel/60 px-4 py-3 text-xs text-jigen-ink-soft hover:border-jigen-gold/60"
-        >
-          <span className="inline-flex items-center gap-2">
-            <Check aria-hidden className="h-3.5 w-3.5 text-emerald-400" />
-            今週の金曜小テスト 完了 — スコア: <span className="font-bold text-jigen-gold">{weeklyTest.score}/{weeklyTest.total}問</span>
-          </span>
-          <span className="inline-flex items-center gap-1 text-jigen-gold">
-            結果を見る <ArrowRight aria-hidden className="h-3 w-3" />
-          </span>
-        </Link>
-      ) : weeklyTest.status === 'available' || weeklyTest.status === 'in_progress' ? (
-        <Link
-          href="/weekly-test"
-          className="group mb-3 block rounded-2xl border-2 border-jigen-gold bg-panel-gradient p-5 shadow-gold-glow transition-transform hover:scale-[1.01]"
-        >
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-jigen-bg-dark">
-              <Sparkles aria-hidden className="h-6 w-6" />
-            </div>
-            <div className="flex-1">
-              <p className="text-[10px] uppercase tracking-[0.25em] text-jigen-gold">
-                Weekly Test
-              </p>
-              <p className="text-base font-bold text-jigen-ink sm:text-lg">
-                {weeklyTest.status === 'in_progress'
-                  ? '金曜小テストの続きから(25問)'
-                  : '今週の金曜小テスト 開催中(25問)'}
-              </p>
-              <p className="mt-1 text-xs text-jigen-ink-soft">
-                {weeklyTest.status === 'in_progress'
-                  ? '進捗は保存されています。続きから再開できます。'
-                  : '直近7日の解答から正解13問+間違え12問。 学習の定着を確認しましょう。'}
-              </p>
-            </div>
-            <ArrowRight aria-hidden className="h-5 w-5 shrink-0 text-jigen-gold transition-transform group-hover:translate-x-1" />
-          </div>
-        </Link>
-      ) : weeklyTest.status === 'upcoming' && weeklyTest.daysToFriday > 0 ? (
-        <Link
-          href="/weekly-test"
-          className="mb-3 block rounded-2xl border border-jigen-gold/40 bg-jigen-bg-panel/80 p-4 transition-colors hover:border-jigen-gold"
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-jigen-gold/15 text-jigen-gold">
-              <Clock aria-hidden className="h-5 w-5" />
-            </div>
-            <div className="flex-1">
-              <p className="text-[10px] uppercase tracking-widest text-jigen-gold">次の金曜小テスト</p>
-              <p className="text-sm font-bold text-jigen-ink">
-                開催まで <span className="text-jigen-gold">{weeklyTest.daysToFriday}日</span>(毎週金曜0時開始)
-              </p>
-            </div>
-            <ArrowRight aria-hidden className="h-4 w-4 shrink-0 text-jigen-gold" />
-          </div>
-        </Link>
-      ) : null}
-
-      {/* 特別模試バナー(DB連動・期間判定) */}
-      {specialMock && specialMock.attempt_status !== 'completed' ? (
-        specialMock.status === 'open' ? (
-          <Link
-            href={`/mock-exam/${specialMock.id}`}
-            className="group mb-3 block overflow-hidden rounded-2xl border-2 border-jigen-warning bg-gradient-to-br from-red-900/40 via-jigen-bg-panel to-jigen-bg-panel p-5 shadow-[0_0_20px_rgba(239,68,68,0.25)] transition-transform hover:scale-[1.01]"
-          >
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-jigen-warning/20 text-jigen-warning">
-                <span className="text-xl">🔥</span>
-              </div>
-              <div className="flex-1">
-                <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-jigen-warning">
-                  期間限定 開催中
-                </p>
-                <p className="text-base font-bold text-jigen-ink sm:text-lg">
-                  {specialMock.title}
-                </p>
-                <p className="mt-1 text-xs text-jigen-ink-soft">
-                  {specialMock.attempt_status === 'in_progress' ? '進捗は保存されています。続きから再開できます。' : '本番形式・50問・約60分'}
-                </p>
-              </div>
-              <ArrowRight aria-hidden className="h-5 w-5 shrink-0 text-jigen-warning transition-transform group-hover:translate-x-1" />
-            </div>
-          </Link>
-        ) : specialMock.status === 'upcoming' ? (
-          <Link
-            href="/mock-exam"
-            className="mb-3 block rounded-2xl border border-jigen-warning/40 bg-jigen-bg-panel/80 p-4 transition-colors hover:border-jigen-warning"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-jigen-warning/15 text-jigen-warning">
-                <Clock aria-hidden className="h-5 w-5" />
-              </div>
-              <div className="flex-1">
-                <p className="text-[10px] uppercase tracking-widest text-jigen-warning">開催予告</p>
-                <p className="text-sm font-bold text-jigen-ink">
-                  {specialMock.title} まで <span className="text-jigen-warning">{specialMock.days_to_open}日</span>
-                </p>
-              </div>
-              <ArrowRight aria-hidden className="h-4 w-4 shrink-0 text-jigen-warning" />
-            </div>
-          </Link>
-        ) : null
+      {/* 【Streaming SSR】 重いバナー(金曜小テスト + 特別模試) は Suspense で後から */}
+      {user ? (
+        <Suspense fallback={<BottomBannersSkeleton />}>
+          <BottomBanners userId={user.id} />
+        </Suspense>
       ) : null}
 
       {/* 3カラム: 現在判定 / 現在地 / 継続日数 */}
