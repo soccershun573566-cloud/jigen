@@ -12,6 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 function SignupForm() {
   const params = useSearchParams();
   const isBeta = params.get('beta') === '1';
+  const vipCode = params.get('vip') ?? '';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,7 +27,7 @@ function SignupForm() {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ plan: 'beta_first' }),
+        body: JSON.stringify({ plan: 'beta_first', vipCode }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) {

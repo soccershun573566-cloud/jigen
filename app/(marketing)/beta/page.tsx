@@ -23,6 +23,12 @@ import {
 } from 'lucide-react';
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
 import { CheckoutButton } from '@/components/billing/CheckoutButton';
+import { LaunchCountdown } from '@/components/marketing/LaunchCountdown';
+import {
+  getLaunchPhase,
+  LAUNCH_GENERAL_START_ISO,
+  LAUNCH_VIP_START_ISO,
+} from '@/lib/launch';
 
 export const metadata: Metadata = {
   title: 'ジゲン 試験直前ver | 1級建築施工管理技士 1次試験対策のAI伴走パートナー',
@@ -30,11 +36,10 @@ export const metadata: Metadata = {
     '2026年7月の1次試験まで直前駆け込み層を救う、AI伴走パートナー「ジゲン」 試験直前ver。¥1,500 買い切りで 2026/07/20まで使い放題(サブスクなし)。30名限定。',
 };
 
-// 【高速化】 毎リクエストSSR → ISR (1時間キャッシュ・Vercel CDN ヒット)
-// 残り日数は「あとN日」 粒度なので 1時間遅延でも体感ゼロ。
-// 旧: 毎アクセスで Vercel Function 起動・SQL なくとも数百ms
-// 新: CDN edge から HTML 即配信(数十ms)
-export const revalidate = 3600;
+// ローンチ期間中は秒単位で表示が変わるため動的レンダリングに変更
+// (カウントダウン後のフェーズ切替に正確性が必要)
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 // 試験日と限定数(本番では env or DB)
 const EXAM_DATE = '2026-07-19';
@@ -46,8 +51,12 @@ function daysLeft(target: string): number {
   return Math.max(0, Math.ceil((t - now) / (24 * 60 * 60 * 1000)));
 }
 
-export default function BetaPage() {
+type SearchParams = { vip?: string };
+
+export default function BetaPage({ searchParams }: { searchParams?: SearchParams }) {
   const dleft = daysLeft(EXAM_DATE);
+  const phase = getLaunchPhase(searchParams?.vip);
+  const isPurchasable = phase === 'open' || phase === 'vip-only-ok';
 
   return (
     <main className="min-h-screen bg-jigen-bg-dark text-jigen-ink">
@@ -113,15 +122,68 @@ export default function BetaPage() {
             <span className="font-bold text-jigen-gold">2026/07/20まで使い放題</span> / サブスクなし・即日学習スタート
           </p>
 
-          {/* CTA */}
-          <Link
-            href="/auth/signup?beta=1"
-            className="group inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-gold-gradient px-10 text-lg font-extrabold text-jigen-bg-dark shadow-gold-glow-strong transition-all hover:scale-[1.03]"
-          >
-            試験直前ver(1次) を購入(¥1,500 一括)
-            <ArrowRight aria-hidden className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-          </Link>
-          <p className="mt-3 text-[11px] text-jigen-ink-mute">買い切り / 即日学習スタート / Stripe決済</p>
+          {/* 【フェーズ別CTA】 */}
+          {phase === 'before-vip' ? (
+            <>
+              <div className="w-full max-w-md">
+                <LaunchCountdown
+                  targetISO={LAUNCH_GENERAL_START_ISO}
+                  mode="large"
+                  label="一般販売開始まで"
+                />
+              </div>
+              <p className="mt-2 max-w-md text-center text-[12px] text-jigen-ink-soft [text-wrap:balance]">
+                <span className="font-bold text-jigen-gold">一般販売: 2026/06/19(金) 0:00〜</span><br />
+                公式LINEで「購入希望」 と送ってくれた方には<br />
+                <span className="font-bold text-jigen-warning">23:55から5分早く先行販売</span>します。
+              </p>
+              <button
+                type="button"
+                disabled
+                className="mt-4 inline-flex h-16 items-center justify-center gap-2 rounded-2xl border-2 border-jigen-border-soft bg-jigen-bg-panel px-10 text-lg font-bold text-jigen-ink-mute opacity-60"
+              >
+                解禁まであと少し お待ちください
+              </button>
+            </>
+          ) : phase === 'vip-only-blocked' ? (
+            <>
+              <div className="w-full max-w-md">
+                <LaunchCountdown
+                  targetISO={LAUNCH_GENERAL_START_ISO}
+                  mode="large"
+                  label="一般販売開始まで"
+                />
+              </div>
+              <p className="mt-2 max-w-md text-center text-[12px] text-jigen-ink-soft [text-wrap:balance]">
+                現在 <span className="font-bold text-jigen-warning">VIP優先購入期間中</span>。<br />
+                公式LINEから先行案内を受け取った方のみ購入可能です。<br />
+                <span className="text-jigen-ink-mute">一般販売は 6/19(金) 0:00 開始です。</span>
+              </p>
+              <button
+                type="button"
+                disabled
+                className="mt-4 inline-flex h-16 items-center justify-center gap-2 rounded-2xl border-2 border-jigen-border-soft bg-jigen-bg-panel px-10 text-lg font-bold text-jigen-ink-mute opacity-60"
+              >
+                一般販売開始まで お待ちください
+              </button>
+            </>
+          ) : (
+            <>
+              {phase === 'vip-only-ok' ? (
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-jigen-warning/60 bg-jigen-warning-soft/15 px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-jigen-warning">
+                  🔓 VIP優先購入アクセス
+                </div>
+              ) : null}
+              <Link
+                href={`/auth/signup?beta=1${searchParams?.vip ? `&vip=${encodeURIComponent(searchParams.vip)}` : ''}`}
+                className="group inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-gold-gradient px-10 text-lg font-extrabold text-jigen-bg-dark shadow-gold-glow-strong transition-all hover:scale-[1.03]"
+              >
+                試験直前ver(1次) を購入(¥1,500 一括)
+                <ArrowRight aria-hidden className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+              </Link>
+              <p className="mt-3 text-[11px] text-jigen-ink-mute">買い切り / 即日学習スタート / Stripe決済</p>
+            </>
+          )}
         </div>
       </section>
 
@@ -266,16 +328,32 @@ export default function BetaPage() {
           <p className="mx-auto mb-8 max-w-xl text-sm leading-relaxed text-jigen-ink-soft sm:text-base [text-wrap:balance]">
             2026年7月の1次試験まで{dleft}日。 ジゲンのβ枠で、 あなたの最後の追い込みを共有しませんか。
           </p>
-          <Link
-            href="/auth/signup?beta=1"
-            className="group inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-gold-gradient px-10 text-lg font-extrabold text-jigen-bg-dark shadow-gold-glow-strong transition-all hover:scale-[1.03] sm:px-14"
-          >
-            試験直前ver で駆け抜ける
-            <ArrowRight aria-hidden className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-          </Link>
-          <p className="mt-4 text-[11px] text-jigen-ink-mute">
-            即日学習スタート / クレカ・Apple Pay・Google Pay・Link対応 / 買い切り
-          </p>
+          {isPurchasable ? (
+            <>
+              <Link
+                href={`/auth/signup?beta=1${searchParams?.vip ? `&vip=${encodeURIComponent(searchParams.vip)}` : ''}`}
+                className="group inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-gold-gradient px-10 text-lg font-extrabold text-jigen-bg-dark shadow-gold-glow-strong transition-all hover:scale-[1.03] sm:px-14"
+              >
+                試験直前ver で駆け抜ける
+                <ArrowRight aria-hidden className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+              </Link>
+              <p className="mt-4 text-[11px] text-jigen-ink-mute">
+                即日学習スタート / クレカ・Apple Pay・Google Pay・Link対応 / 買い切り
+              </p>
+            </>
+          ) : (
+            <div className="mx-auto w-full max-w-md">
+              <LaunchCountdown
+                targetISO={LAUNCH_GENERAL_START_ISO}
+                mode="large"
+                label="一般販売開始まで"
+              />
+              <p className="mt-4 text-center text-xs text-jigen-ink-soft">
+                公式LINE登録で「購入希望」 と送ると<br />
+                <span className="font-bold text-jigen-warning">23:55から5分早く先行販売</span>
+              </p>
+            </div>
+          )}
         </div>
       </section>
 

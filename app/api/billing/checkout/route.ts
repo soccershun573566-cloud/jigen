@@ -19,9 +19,11 @@ import {
   STRIPE_PRICE_BETA_FIRST, STRIPE_PRICE_BETA_SECOND_NEW, STRIPE_PRICE_BETA_SECOND_UPGRADE,
   BETA_FIRST_VALID_UNTIL, BETA_SECOND_VALID_UNTIL,
 } from '@/lib/stripe/client';
+import { getLaunchPhase } from '@/lib/launch';
 
 const CheckoutRequest = z.object({
   plan: z.enum(['monthly', 'yearly', 'beta_first', 'beta_second_new', 'beta_second_upgrade']),
+  vipCode: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -32,6 +34,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: { code: 'validation_error', message: 'plan required' } }, { status: 400 });
     }
     const plan = parsed.data.plan;
+
+    // 試験直前ver の販売時刻ガード(URLバイパスで早期購入を防ぐ)
+    const isBetaPlan = plan === 'beta_first' || plan === 'beta_second_new' || plan === 'beta_second_upgrade';
+    if (isBetaPlan) {
+      const phase = getLaunchPhase(parsed.data.vipCode);
+      if (phase === 'before-vip' || phase === 'vip-only-blocked') {
+        return NextResponse.json({
+          error: { code: 'not_yet_open', message: phase === 'before-vip'
+            ? '販売開始までもう少しお待ちください。 公式LINE登録で先行案内を受け取れます。'
+            : 'VIP優先購入期間中です。 公式LINEで「購入希望」 を送ってください。' }
+        }, { status: 403 });
+      }
+    }
 
     // 買い切りプランは重複購入禁止
     if (plan === 'beta_first') {
