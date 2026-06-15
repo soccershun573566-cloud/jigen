@@ -177,12 +177,12 @@ export default function OnboardingPage() {
               value={form.displayName}
               onChange={(e) => setForm({ ...form, displayName: e.target.value.slice(0, 30) })}
               maxLength={30}
-              placeholder="例) しゅんすけ、 たかし、 ティラノ大好き"
+              placeholder="お名前またはニックネーム"
               autoComplete="nickname"
               className="w-full rounded-lg border border-jigen-border-soft bg-jigen-bg-dark px-4 py-3 text-base text-white placeholder:text-jigen-ink-mute focus:border-jigen-gold focus:outline-none"
             />
             <p className="text-[11px] text-jigen-ink-mute">
-              入力しないでも進めます(その時は「あなた」と呼びかけます)。<br />
+              空欄の場合は登録されたメールアドレスでの表示になります。<br />
               後で設定からいつでも変更できます。 30文字まで。
             </p>
           </div>
