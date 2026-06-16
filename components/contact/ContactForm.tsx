@@ -80,7 +80,7 @@ export function ContactForm() {
             onChange={(e) => setName(e.target.value)}
             maxLength={80}
             className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            placeholder="山口 竣輔"
+            placeholder="建築 太郎"
           />
         </div>
         <div>
