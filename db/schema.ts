@@ -78,6 +78,7 @@ export const questions = pgTable('questions', {
   explanationMd: text('explanation_md').notNull(),
   isNumeric: boolean('is_numeric').notNull().default(false),
   numericTolerance: real('numeric_tolerance'),
+  isApplied: boolean('is_applied').notNull().default(false),
   copyrightStatus: copyrightStatusEnum('copyright_status').notNull().default('pending'),
   published: boolean('published').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

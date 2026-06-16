@@ -80,7 +80,7 @@ export async function GET() {
       subTopic: row.sub_topic,
       difficulty: row.difficulty,
       bodyMd: row.body_md,
-      choices: row.choices,
+      choices: typeof row.choices === 'string' ? (() => { try { return JSON.parse(row.choices as string); } catch { return row.choices; } })() : row.choices,
       isNumeric: row.is_numeric,
     });
   } catch (err) {
