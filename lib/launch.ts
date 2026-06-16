@@ -6,6 +6,15 @@
 export const LAUNCH_GENERAL_START_ISO = '2026-06-19T00:00:00+09:00';
 export const LAUNCH_VIP_START_ISO = '2026-06-18T23:55:00+09:00';
 
+// 本ローンチ(月額/年額サブスク販売開始)
+// それまでは LP の月額/年額プラン表示と「7日間無料」 サインアップを非表示にする
+export const FULL_LAUNCH_START_ISO = '2026-10-20T00:00:00+09:00';
+
+/** 本ローンチ済か(月額/年額の購入導線を有効化するか) */
+export function isFullLaunched(): boolean {
+  return Date.now() >= new Date(FULL_LAUNCH_START_ISO).getTime();
+}
+
 // VIPコード(LINE登録者の「購入希望」 タグユーザーに 23:55 配信される URL の vip パラメータ)
 // 環境変数で上書き可能。 デフォルトは「jigen-earlybird-2026」
 export function getVipCode(): string {

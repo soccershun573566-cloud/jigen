@@ -28,7 +28,7 @@ import { TiranoSensei } from '@/components/mascot/TiranoSensei';
 export const metadata: Metadata = {
   title: 'ジゲン | 1級建築施工管理技士のためのAI伴走パートナー',
   description:
-    '「あなたの時間・ペースに合わせて合格までサポートする、資格取得のためのAI伴走パートナー」。弱点AI出題・SRS忘却曲線・経験記述添削・24時間チャットで、夜の机に伴走者を。月¥2,980・7日無料・クレカ不要。',
+    '「あなたの時間・ペースに合わせて合格までサポートする、資格取得のためのAI伴走パートナー」。弱点AI出題・SRS忘却曲線・経験記述添削・24時間チャットで、夜の机に伴走者を。試験直前ver(¥1,500買い切り) 30名限定販売中。',
 };
 
 export default function HomePage() {
@@ -65,7 +65,7 @@ export default function HomePage() {
                 ログイン
               </Link>
               <Link
-                href="/auth/signup"
+                href="/beta"
                 className="rounded-full border border-jigen-gold/50 px-3 py-1.5 text-xs font-semibold text-jigen-gold hover:bg-jigen-gold/10 sm:px-4 sm:text-sm"
               >
                 無料で試す
@@ -103,14 +103,14 @@ export default function HomePage() {
           {/* CTA */}
           <div className="flex flex-col items-center gap-3 sm:flex-row">
             <Link
-              href="/auth/signup"
+              href="/beta"
               className="group inline-flex h-14 items-center justify-center gap-2 rounded-xl bg-gold-gradient px-8 text-base font-bold text-jigen-bg-dark shadow-gold-glow transition-all hover:scale-[1.02] hover:shadow-gold-glow-strong sm:px-10"
             >
-              7日間無料で始める
+              試験直前ver を見る(¥1,500)
               <ArrowRight aria-hidden className="h-5 w-5 transition-transform group-hover:translate-x-1" />
             </Link>
             <p className="text-[11px] text-jigen-ink-mute">
-              クレジットカードの登録は不要
+              30名限定 / 買い切り / 即日学習開始
             </p>
           </div>
 
@@ -601,63 +601,27 @@ export default function HomePage() {
             </h2>
             <p className="mx-auto max-w-2xl text-sm leading-relaxed text-jigen-ink-soft">
               「お金払ったのに進まなかった」自己嫌悪から、あなたを守ります。
-              7日間無料・クレカ不要・解約はワンタップ。
+              買い切り / サブスクなし / 即日学習スタート。
             </p>
           </div>
 
-          <div className="mx-auto grid max-w-3xl gap-6 sm:grid-cols-2">
-            {/* 月額 */}
-            <article className="relative rounded-2xl border border-jigen-border-soft bg-jigen-bg-panel p-6 shadow-panel">
-              <p className="mb-1 text-[10px] uppercase tracking-[0.25em] text-jigen-ink-mute">
-                月額プラン
+          {/* 試験直前ver販売中 = 月額/年額カードは非表示・告知ブロックに置き換え */}
+          {/* 本ローンチ(2026/10/20予定)後は元の月額/年額カードに戻す */}
+          <div className="mx-auto max-w-3xl">
+            <article className="relative overflow-hidden rounded-2xl border-2 border-jigen-gold bg-panel-gradient p-8 shadow-gold-glow text-center">
+              <p className="mb-2 text-[10px] uppercase tracking-[0.3em] text-jigen-gold">
+                Limited - 試験直前ver
               </p>
-              <p className="mb-4 text-4xl font-extrabold tabular-nums">
-                ¥2,980<span className="ml-1 text-sm font-normal text-jigen-ink-soft">/月</span>
+              <p className="mb-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
+                現在、 <span className="text-jigen-gold">試験直前ver(¥1,500買い切り)</span> を販売中
               </p>
-              <ul className="mb-6 space-y-2 text-xs text-jigen-ink-soft">
-                <li className="flex items-start gap-2">
-                  <Check aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-jigen-gold" />
-                  まずは月単位で試したい方向け
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-jigen-gold" />
-                  全機能アクセス可能
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-jigen-gold" />
-                  いつでもワンタップ解約
-                </li>
-              </ul>
-            </article>
-
-            {/* 年額(推奨) */}
-            <article className="relative overflow-hidden rounded-2xl border-2 border-jigen-gold bg-panel-gradient p-6 shadow-gold-glow">
-              <span className="absolute right-4 top-4 rounded-full bg-gold-gradient px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-jigen-bg-dark">
-                おすすめ
-              </span>
-              <p className="mb-1 text-[10px] uppercase tracking-[0.25em] text-jigen-gold">
-                年額プラン
+              <p className="mx-auto mb-6 max-w-xl text-sm leading-relaxed text-jigen-ink-soft">
+                1級建築施工管理 1次試験まで残り日数の駆け込み層向け 短期集中プラン。<br />
+                <span className="text-jigen-ink">30名限定 / サブスクではない買い切り / 2026/07/20まで使い放題</span>
               </p>
-              <p className="mb-1 text-4xl font-extrabold tabular-nums">
-                ¥24,800<span className="ml-1 text-sm font-normal text-jigen-ink-soft">/年</span>
+              <p className="text-xs text-jigen-ink-mute">
+                本アプリ(月額/年額サブスク)は <span className="text-jigen-gold">2026年10月20日</span> リリース予定
               </p>
-              <p className="mb-4 text-xs text-jigen-ink-soft">
-                月換算 <span className="font-semibold text-jigen-gold">¥2,067</span>(月額比 30%お得)
-              </p>
-              <ul className="mb-6 space-y-2 text-xs text-jigen-ink-soft">
-                <li className="flex items-start gap-2">
-                  <Check aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-jigen-gold" />
-                  本気で合格を目指す方向け
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-jigen-gold" />
-                  試験日逆算フェーズ判定が真価を発揮
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-jigen-gold" />
-                  通学型の <span className="font-bold text-jigen-gold">1/29</span> の価格
-                </li>
-              </ul>
             </article>
           </div>
 
@@ -665,15 +629,15 @@ export default function HomePage() {
           <div className="mx-auto mt-8 flex max-w-3xl flex-wrap items-center justify-center gap-x-6 gap-y-3 rounded-xl border border-jigen-gold/30 bg-jigen-bg-panel/40 p-4 text-[11px] text-jigen-ink-soft">
             <span className="inline-flex items-center gap-1.5">
               <ShieldCheck aria-hidden className="h-3.5 w-3.5 text-jigen-gold" />
-              7日間完全無料
+              買い切り(サブスクなし)
             </span>
             <span className="inline-flex items-center gap-1.5">
               <ShieldCheck aria-hidden className="h-3.5 w-3.5 text-jigen-gold" />
-              クレジットカード登録不要
+              Stripe決済(PCI DSS準拠)
             </span>
             <span className="inline-flex items-center gap-1.5">
               <ShieldCheck aria-hidden className="h-3.5 w-3.5 text-jigen-gold" />
-              いつでもワンタップ解約
+              即日学習スタート
             </span>
             <span className="inline-flex items-center gap-1.5">
               <ShieldCheck aria-hidden className="h-3.5 w-3.5 text-jigen-gold" />
@@ -733,17 +697,17 @@ export default function HomePage() {
             </span>
           </h2>
           <p className="mx-auto mb-8 max-w-xl text-sm leading-relaxed text-jigen-ink-soft [text-wrap:balance] sm:text-base">
-            あなたの時間・ペースに合わせて、合格まで。まずは7日間、無料で体験してみてください。
+            1次試験まで残り日数の駆け込み層を救うため、 試験直前ver(¥1,500買い切り) を 30名限定で販売中。
           </p>
           <Link
-            href="/auth/signup"
+            href="/beta"
             className="group inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-gold-gradient px-10 text-lg font-extrabold text-jigen-bg-dark shadow-gold-glow-strong transition-all hover:scale-[1.03] sm:px-14"
           >
-            7日間無料で始める
+            試験直前ver の詳細を見る
             <ArrowRight aria-hidden className="h-5 w-5 transition-transform group-hover:translate-x-1" />
           </Link>
           <p className="mt-4 text-[11px] text-jigen-ink-mute">
-            クレジットカードの登録は不要 / 1分で完了
+            買い切り / 2026/07/20まで使い放題 / Stripe決済
           </p>
         </div>
       </section>
