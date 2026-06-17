@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { attempts } from '@/db/schema';
+import { parseAnswerToValue } from '@/lib/learning/scoring';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,10 +95,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ examId: string
     for (const q of qRows) {
       const idx = String(q.order_index);
       const userAns = answers[idx];
-      const correctValue = typeof q.answer === 'object' && q.answer !== null
-        ? (q.answer as { value: number }).value
-        : Number(q.answer);
-      const isCorrect = userAns === correctValue;
+      const correctValue = parseAnswerToValue(q.answer);
+      const isCorrect = correctValue !== null && userAns === correctValue;
       if (isCorrect) totalCorrect++;
 
       // section別集計
