@@ -13,12 +13,12 @@ export default function QuizComingSoonPage() {
         <h1 className="text-xl font-bold text-jigen-ink">
           ○×クイズは本アプリで搭載予定
         </h1>
-        <p className="text-sm leading-relaxed text-jigen-ink-soft">
+        <p className="text-sm leading-relaxed text-jigen-ink">
           スキマ時間にサクッと判断力を鍛える、 ○×形式のミニクイズ機能です。
           <br />
           本アプリ(2026年10月) のリリースをお待ちください。
         </p>
-        <p className="mt-3 text-xs text-jigen-ink-mute">
+        <p className="mt-3 text-xs text-jigen-ink-soft">
           試験直前verではご利用いただけません。
         </p>
       </div>

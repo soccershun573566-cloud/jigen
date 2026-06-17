@@ -13,12 +13,12 @@ export default function TriviaComingSoonPage() {
         <h1 className="text-xl font-bold text-jigen-ink">
           建築豆知識は本アプリで搭載予定
         </h1>
-        <p className="text-sm leading-relaxed text-jigen-ink-soft">
+        <p className="text-sm leading-relaxed text-jigen-ink">
           試験には出ないけど、 現場で役立つ建築の小ネタを集めたコラム機能です。
           <br />
           本アプリ(2026年10月) のリリースをお待ちください。
         </p>
-        <p className="mt-3 text-xs text-jigen-ink-mute">
+        <p className="mt-3 text-xs text-jigen-ink-soft">
           試験直前verではご利用いただけません。
         </p>
       </div>
