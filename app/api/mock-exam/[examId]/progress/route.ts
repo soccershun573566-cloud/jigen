@@ -15,7 +15,11 @@ export const dynamic = 'force-dynamic';
 
 const ProgressRequest = z.object({
   currentIndex: z.number().int().min(0),
-  answers: z.record(z.string(), z.number().int().min(1).max(4)),
+  // 一般問題は number、 応用問題は number[](長さ2)
+  answers: z.record(z.string(), z.union([
+    z.number().int().min(1).max(5),
+    z.array(z.number().int().min(1).max(5)).length(2),
+  ])),
 });
 
 export async function POST(req: Request, ctx: { params: Promise<{ examId: string }> }) {

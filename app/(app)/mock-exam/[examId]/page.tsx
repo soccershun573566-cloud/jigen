@@ -27,18 +27,38 @@ type Question = {
   sub_topic: string;
   order_index: number;
 };
+type AnswerValue = number | number[];
 type Attempt = {
   id: string;
   started_at: string;
   completed_at: string | null;
   current_question_index: number;
-  answers: Record<string, number>;
+  answers: Record<string, AnswerValue>;
   score: number | null;
   section_scores: Record<string, { total: number; correct: number }> | null;
 };
 type ExamData = { exam: ExamMeta; questions: Question[]; attempt: Attempt | null };
 
 type SectionStats = { total: number; correct: number };
+type CompleteResult = {
+  score: number;
+  total: number;
+  sectionScores: Record<string, SectionStats>;
+  generalScore?: SectionStats;
+  appliedScore?: SectionStats;
+};
+
+/** 問題の選択肢数 ≥5 なら応用(五肢二択・2つ選ぶ) */
+function isAppliedQuestion(q: Question): boolean {
+  return (q.choices?.length ?? 0) >= 5;
+}
+
+/** 問題が解答完了済か判定。 一般=number有り、 応用=長さ2の配列 */
+function isQuestionAnswered(q: Question, ans: AnswerValue | undefined): boolean {
+  if (ans === undefined) return false;
+  if (isAppliedQuestion(q)) return Array.isArray(ans) && ans.length === 2;
+  return typeof ans === 'number';
+}
 
 function extractChoices(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.filter((x): x is string => typeof x === 'string');
@@ -59,9 +79,12 @@ export default function MockExamPage() {
   const [data, setData] = useState<ExamData | null>(null);
   const [phase, setPhase] = useState<'intro' | 'taking' | 'submitting' | 'result' | 'loading'>('loading');
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, number>>({});
-  const [completeResult, setCompleteResult] = useState<{ score: number; total: number; sectionScores: Record<string, SectionStats> } | null>(null);
+  const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
+  const [completeResult, setCompleteResult] = useState<CompleteResult | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // 直前模試か判定(タイトル分岐・一般/応用別表示用)
+  const isPreExam = examId.startsWith('pre-exam');
 
   // 初回ロード
   useEffect(() => {
@@ -77,10 +100,19 @@ export default function MockExamPage() {
         if (d.attempt?.completed_at) {
           // 完了済 → 結果表示
           if (d.attempt.score !== null && d.attempt.section_scores) {
+            // section_scores に __general/__applied サマリが埋め込まれていれば取り出す
+            const rawSs = d.attempt.section_scores as Record<string, SectionStats>;
+            const generalScore = (rawSs as Record<string, SectionStats>)['__general'];
+            const appliedScore = (rawSs as Record<string, SectionStats>)['__applied'];
+            const sectionScores: Record<string, SectionStats> = Object.fromEntries(
+              Object.entries(rawSs).filter(([k]) => !k.startsWith('__')),
+            );
             setCompleteResult({
               score: d.attempt.score,
               total: d.exam.questions_count,
-              sectionScores: d.attempt.section_scores,
+              sectionScores,
+              generalScore,
+              appliedScore,
             });
             // 完了済の模試を再表示する流入時もキューをクリア(念のため)
             clearPracticeQueue();
@@ -108,7 +140,7 @@ export default function MockExamPage() {
     return data.questions[currentIndex] ?? null;
   }, [data, currentIndex]);
 
-  async function saveProgress(idx: number, ans: Record<string, number>) {
+  async function saveProgress(idx: number, ans: Record<string, AnswerValue>) {
     try {
       await fetch(`/api/mock-exam/${examId}/progress`, {
         method: 'POST',
@@ -122,9 +154,24 @@ export default function MockExamPage() {
   function handleSelect(value: number) {
     if (!currentQuestion) return;
     const key = String(currentQuestion.order_index);
-    const next = { ...answers, [key]: value };
+    let nextAnswer: AnswerValue;
+    if (isAppliedQuestion(currentQuestion)) {
+      // 応用: 2つ選択(トグル方式)
+      const prev = answers[key];
+      const prevArr = Array.isArray(prev) ? prev : [];
+      if (prevArr.includes(value)) {
+        nextAnswer = prevArr.filter((v) => v !== value);
+      } else if (prevArr.length >= 2) {
+        // 既に2つ選択済 → 最古を外して新規追加
+        nextAnswer = [prevArr[1], value] as number[];
+      } else {
+        nextAnswer = [...prevArr, value];
+      }
+    } else {
+      nextAnswer = value;
+    }
+    const next = { ...answers, [key]: nextAnswer };
     setAnswers(next);
-    // 即座にバックグラウンド保存
     void saveProgress(currentIndex, next);
   }
 
@@ -159,7 +206,7 @@ export default function MockExamPage() {
         const j = await res.json().catch(() => null);
         throw new Error(j?.error?.message ?? `HTTP ${res.status}`);
       }
-      const result = (await res.json()) as { score: number; total: number; sectionScores: Record<string, SectionStats> };
+      const result = (await res.json()) as CompleteResult;
       setCompleteResult(result);
       // 模試完了 → 出題ロジックが変わるので、 古いキャッシュキューを破棄
       // (注意点2の対策: 直後の「次の問題」 が古い出題ロジックで取られたものにならないように)
@@ -267,8 +314,15 @@ export default function MockExamPage() {
       );
     }
     const total = data.questions.length;
-    const selected = answers[String(q.order_index)] ?? null;
-    const answeredCount = Object.keys(answers).length;
+    const selectedRaw = answers[String(q.order_index)];
+    const isApplied = isAppliedQuestion(q);
+    const selectedSet = new Set<number>(
+      Array.isArray(selectedRaw) ? selectedRaw : (typeof selectedRaw === 'number' ? [selectedRaw] : [])
+    );
+    // 応用問題は2つ完答で「解答済」、 一般は1つで OK
+    const answeredCount = data.questions.reduce((c, qq) => {
+      return c + (isQuestionAnswered(qq, answers[String(qq.order_index)]) ? 1 : 0);
+    }, 0);
     const progressPct = Math.round((answeredCount / total) * 100);
     const isLast = currentIndex === total - 1;
 
@@ -285,7 +339,7 @@ export default function MockExamPage() {
             中断する
           </button>
           <span className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">
-            初回模試 / 第{currentIndex + 1}問 of {total}
+            {isPreExam ? '本番直前模試' : '初回模試'} / 第{currentIndex + 1}問 of {total}
           </span>
         </div>
 
@@ -314,13 +368,18 @@ export default function MockExamPage() {
           <p className="whitespace-pre-line text-[15px] leading-relaxed text-jigen-ink">
             {q.body_md}
           </p>
+          {isApplied ? (
+            <p className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-jigen-gold/60 bg-jigen-gold/10 px-2 py-1 text-[11px] font-bold text-jigen-gold">
+              応用能力問題: 不適当なものを <span className="text-sm">2つ</span> 選んでください ({selectedSet.size}/2)
+            </p>
+          ) : null}
         </article>
 
         {/* 選択肢 */}
         <ul className="mb-5 flex flex-col gap-3">
           {q.choices.map((label, i) => {
             const num = i + 1;
-            const isPicked = selected === num;
+            const isPicked = selectedSet.has(num);
             return (
               <li key={i}>
                 <button
@@ -335,7 +394,8 @@ export default function MockExamPage() {
                   )}
                 >
                   <span className={cn(
-                    'mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-[13px] font-bold',
+                    'mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px] font-bold',
+                    isApplied ? 'rounded-md border-2' : 'rounded-full border-2',
                     isPicked ? 'border-jigen-gold bg-jigen-gold text-jigen-bg-dark' : 'border-jigen-border-soft text-jigen-ink-soft',
                   )}>
                     {num}
@@ -394,9 +454,12 @@ export default function MockExamPage() {
   }
 
   if (phase === 'result' && completeResult) {
-    const { score, total, sectionScores } = completeResult;
+    const { score, total, sectionScores, generalScore, appliedScore } = completeResult;
     const pct = Math.round((score / total) * 100);
-    const sections = Object.entries(sectionScores);
+    const sections = Object.entries(sectionScores).filter(([k]) => !k.startsWith('__'));
+    const hasApplied = !!appliedScore && appliedScore.total > 0;
+    const generalPct = generalScore && generalScore.total > 0 ? Math.round((generalScore.correct / generalScore.total) * 100) : 0;
+    const appliedPct = appliedScore && appliedScore.total > 0 ? Math.round((appliedScore.correct / appliedScore.total) * 100) : 0;
     return (
       <main className="mx-auto w-full max-w-2xl px-5 py-8 text-jigen-ink">
         <div className="mb-6 flex justify-center">
@@ -406,7 +469,7 @@ export default function MockExamPage() {
           診断結果
         </p>
         <h1 className="mb-2 text-center text-2xl font-extrabold tracking-tight text-jigen-ink drop-shadow-[0_0_10px_rgba(245,196,65,0.25)]">
-          現状把握模試 完了!
+          {isPreExam ? '本番直前模試' : '現状把握模試'} 完了!
         </h1>
         <p className="mb-6 text-center text-sm text-jigen-ink">
           お疲れさまでした。 結果はあなただけが見られます。
@@ -423,6 +486,26 @@ export default function MockExamPage() {
             1級建築施工管理技士(第一次)の<span className="font-bold text-jigen-gold">合格目安は60%</span>と言われています。
           </p>
         </section>
+
+        {/* 一般 / 応用 別スコア(直前模試で応用問題ありの場合のみ) */}
+        {hasApplied && generalScore ? (
+          <section className="mb-6 grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-4 text-center">
+              <p className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">一般問題</p>
+              <p className="mt-1 text-3xl font-extrabold tabular-nums text-jigen-ink">
+                {generalScore.correct}<span className="text-base text-jigen-ink-soft">/{generalScore.total}</span>
+              </p>
+              <p className="mt-0.5 text-xs text-jigen-ink-soft">{generalPct}% 正答</p>
+            </div>
+            <div className="rounded-xl border border-jigen-gold/60 bg-jigen-gold/10 p-4 text-center">
+              <p className="text-[10px] uppercase tracking-widest text-jigen-gold">応用能力</p>
+              <p className="mt-1 text-3xl font-extrabold tabular-nums text-jigen-gold">
+                {appliedScore!.correct}<span className="text-base text-jigen-ink-soft">/{appliedScore!.total}</span>
+              </p>
+              <p className="mt-0.5 text-xs text-jigen-ink-soft">{appliedPct}% 正答</p>
+            </div>
+          </section>
+        ) : null}
 
         {/* 教科別 */}
         <section className="mb-6 rounded-xl border border-jigen-border-soft bg-jigen-bg-panel p-5 shadow-panel">

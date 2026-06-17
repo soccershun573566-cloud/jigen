@@ -105,9 +105,9 @@ export async function POST(req: Request) {
       const isCorrect = correctValue !== null && userAns === correctValue;
       if (isCorrect) totalCorrect++;
 
-      sectionScores[q.section] ??= { total: 0, correct: 0 };
-      sectionScores[q.section].total++;
-      if (isCorrect) sectionScores[q.section].correct++;
+      const ss = (sectionScores[q.section] ??= { total: 0, correct: 0 });
+      ss.total++;
+      if (isCorrect) ss.correct++;
 
       if (userAns !== undefined) {
         attemptRows.push({

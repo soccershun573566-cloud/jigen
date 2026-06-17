@@ -1,12 +1,14 @@
 /**
  * POST /api/mock-exam/[examId]/complete
  * 模試の完了処理:
- *   1. 全回答を採点(各問題のanswer.value と比較)
- *   2. 全体スコア・教科別スコア計算
+ *   1. 全回答を採点(一般=単一値・応用=配列)
+ *   2. 全体スコア + 教科別 + 一般/応用別スコア計算
  *   3. mock_attempts.completed_at をセット
- *   4. attempts テーブルに source='mock_initial' で全50問の挑戦記録を INSERT
+ *   4. attempts テーブルに source='mock_<examId>' で全問の挑戦記録を INSERT
  *      → 既存のAI出題エンジン(弱点重み)が即時反映される
- * リクエスト: { answers: Record<string, number> }
+ * リクエスト: { answers: Record<string, number | number[]> }
+ *   - 一般問題: number(1-4)
+ *   - 応用問題: number[](長さ2・各値1-5)
  */
 import { NextResponse } from 'next/server';
 import { sql } from 'drizzle-orm';
@@ -14,18 +16,21 @@ import { z } from 'zod';
 import { requireUser } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { attempts } from '@/db/schema';
-import { parseAnswerToValue } from '@/lib/learning/scoring';
+import { isAnswerCorrect } from '@/lib/learning/scoring';
 
 export const dynamic = 'force-dynamic';
 
+const AppliedAnswer = z.array(z.number().int().min(1).max(5)).length(2);
+const GeneralAnswer = z.number().int().min(1).max(5);
 const CompleteRequest = z.object({
-  answers: z.record(z.string(), z.number().int().min(1).max(4)),
+  answers: z.record(z.string(), z.union([GeneralAnswer, AppliedAnswer])),
 });
 
 type QuestionRow = {
   id: string;
   section: string;
-  answer: { value: number } | number;
+  answer: unknown;
+  is_applied: boolean;
   order_index: number;
 };
 
@@ -39,8 +44,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ examId: string
     }
     const { answers } = parsed.data;
 
-    // 【冪等性ガード】 既に完了済みなら attempts 重複INSERT を防ぐため、 既存スコアを返して早期 return
-    // (ボタン連打・ネットワークリトライ・タブリロード時の二重送信対策)
+    // 冪等性ガード: 既に完了済みなら既存スコアを返却
     const existing = await db.execute(sql`
       select completed_at, score, section_scores
       from mock_attempts
@@ -51,23 +55,34 @@ export async function POST(req: Request, ctx: { params: Promise<{ examId: string
       ?? (existing as unknown as Array<{ completed_at: string | null; score: number | null; section_scores: unknown }>));
     const prior = existingRows?.[0];
     if (prior?.completed_at) {
-      // 既存の集計結果を返却(attempts 重複INSERT は行わない)
       const qCountResult = await db.execute(sql`
-        select count(*)::int as c from mock_exam_questions where mock_exam_id = ${examId}
+        select count(*)::int as c,
+               count(*) filter (where q.is_applied = true)::int as applied_total,
+               count(*) filter (where q.is_applied = false)::int as general_total
+        from mock_exam_questions meq
+        join questions q on q.id = meq.question_id
+        where meq.mock_exam_id = ${examId}
       `);
-      const qCountRows = ((qCountResult as { rows?: { c: number }[] }).rows ?? (qCountResult as unknown as { c: number }[]));
+      const qCountRows = ((qCountResult as { rows?: Array<{ c: number; applied_total: number; general_total: number }> }).rows
+        ?? (qCountResult as unknown as Array<{ c: number; applied_total: number; general_total: number }>));
       const totalQuestions = qCountRows?.[0]?.c ?? 50;
+      const ss = (prior.section_scores ?? {}) as Record<string, { total: number; correct: number }>;
+      // section_scores 内に applied/general 集計を含めるため、 もし存在すればそのまま返却
       return NextResponse.json({
         score: prior.score ?? 0,
         total: totalQuestions,
-        sectionScores: (prior.section_scores ?? {}) as Record<string, { total: number; correct: number }>,
+        sectionScores: ss,
+        generalScore: (ss as Record<string, { total: number; correct: number }>)['__general']
+          ?? { total: qCountRows?.[0]?.general_total ?? 0, correct: 0 },
+        appliedScore: (ss as Record<string, { total: number; correct: number }>)['__applied']
+          ?? { total: qCountRows?.[0]?.applied_total ?? 0, correct: 0 },
         alreadyCompleted: true,
       });
     }
 
     // 模試の全問題と正解
     const qResult = await db.execute(sql`
-      select q.id, q.section, q.answer, meq.order_index
+      select q.id, q.section, q.answer, q.is_applied, meq.order_index
       from mock_exam_questions meq
       join questions q on q.id = meq.question_id
       where meq.mock_exam_id = ${examId}
@@ -79,14 +94,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ examId: string
       return NextResponse.json({ error: { code: 'no_questions', message: '模試の問題がありません' } }, { status: 404 });
     }
 
-    // 採点 + attempts 用レコード収集(DB往復はループ外で1回だけ)
     let totalCorrect = 0;
     const sectionScores: Record<string, { total: number; correct: number }> = {};
+    const generalScore = { total: 0, correct: 0 };
+    const appliedScore = { total: 0, correct: 0 };
     const sourceLabel = `mock_${examId}`;
     const attemptRows: Array<{
       userId: string;
       questionId: string;
-      userAnswer: { value: number };
+      userAnswer: { value: number } | { values: number[] };
       isCorrect: boolean;
       responseSeconds: number;
       source: string;
@@ -95,21 +111,26 @@ export async function POST(req: Request, ctx: { params: Promise<{ examId: string
     for (const q of qRows) {
       const idx = String(q.order_index);
       const userAns = answers[idx];
-      const correctValue = parseAnswerToValue(q.answer);
-      const isCorrect = correctValue !== null && userAns === correctValue;
+      const isCorrect = userAns !== undefined && isAnswerCorrect(userAns, q.answer);
       if (isCorrect) totalCorrect++;
 
-      // section別集計
-      sectionScores[q.section] ??= { total: 0, correct: 0 };
-      sectionScores[q.section].total++;
-      if (isCorrect) sectionScores[q.section].correct++;
+      const ss = (sectionScores[q.section] ??= { total: 0, correct: 0 });
+      ss.total++;
+      if (isCorrect) ss.correct++;
 
-      // attempts 用レコードを配列に蓄積(あとで一括INSERT)
+      if (q.is_applied) {
+        appliedScore.total++;
+        if (isCorrect) appliedScore.correct++;
+      } else {
+        generalScore.total++;
+        if (isCorrect) generalScore.correct++;
+      }
+
       if (userAns !== undefined) {
         attemptRows.push({
           userId: user.id,
           questionId: q.id,
-          userAnswer: { value: userAns },
+          userAnswer: Array.isArray(userAns) ? { values: userAns } : { value: userAns as number },
           isCorrect,
           responseSeconds: 0,
           source: sourceLabel,
@@ -117,9 +138,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ examId: string
       }
     }
 
-    // 【大幅高速化】 旧: 50問 × 逐次 INSERT(RTT 50回)+ mock_attempts UPDATE(RTT 1回) = RTT 51回
-    //              新: 1本の bulk INSERT + UPDATE を Promise.all で並列実行(RTT 1回)
-    //              ※ drizzle の values([...]) で 1ステートメントに展開される
+    // section_scores に general/applied 集計を埋め込んで保存(再表示時に使用)
+    const sectionScoresWithSummary = {
+      ...sectionScores,
+      __general: generalScore,
+      __applied: appliedScore,
+    };
+
     await Promise.all([
       attemptRows.length > 0
         ? db.insert(attempts).values(attemptRows)
@@ -129,7 +154,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ examId: string
         set completed_at = now(),
             answers = ${JSON.stringify(answers)}::jsonb,
             score = ${totalCorrect},
-            section_scores = ${JSON.stringify(sectionScores)}::jsonb,
+            section_scores = ${JSON.stringify(sectionScoresWithSummary)}::jsonb,
             current_question_index = ${qRows.length}
         where user_id = ${user.id}::uuid and mock_exam_id = ${examId}
       `),
@@ -139,6 +164,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ examId: string
       score: totalCorrect,
       total: qRows.length,
       sectionScores,
+      generalScore,
+      appliedScore,
     });
   } catch (err) {
     if (err instanceof Response) return err;
