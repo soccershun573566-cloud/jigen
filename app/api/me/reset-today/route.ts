@@ -1,34 +1,33 @@
 /**
  * POST /api/me/reset-today
  *
- * 認証ユーザーの「今日(JST)分の attempts」を削除して、進捗を 0 に戻す。
- * mastery_profiles は触らない(学習履歴ベースのモデルは保持)。
+ * 「今日の進捗」 表示カウンタをリセットする。
  *
- * 用途: ホームの「リセット」ボタン(誤タップ防止のため2段階確認後に叩かれる)
+ * 【重要・絶対遵守】
+ *   ❌ attempts は絶対に削除しない(間違いリスト・分析データの基礎)
+ *   ❌ mastery_profiles は絶対に削除しない(学習プロファイル)
+ *   ✅ users.daily_reset_at = now() を立てるだけ
+ *   ✅ todaySolved 計算側で「daily_reset_at 以降の attempts のみカウント」 する
+ *
+ * 旧実装は attempts を DELETE していたため、 間違いリスト・分析データが消える
+ * 致命バグになっていた。 これを修正。
  */
 import { NextResponse } from 'next/server';
-import { sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { requireUser } from '@/lib/auth/session';
 import { db } from '@/lib/db';
+import { users } from '@/db/schema';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST() {
   try {
     const user = await requireUser();
-
-    const result = await db.execute(sql`
-      delete from attempts
-      where user_id = ${user.id}
-        and attempted_at >= (date_trunc('day', now() at time zone 'Asia/Tokyo') at time zone 'Asia/Tokyo')
-    `);
-
-    const deleted =
-      (result as unknown as { rowCount?: number }).rowCount ??
-      (result as unknown as { count?: number }).count ??
-      0;
-
-    return NextResponse.json({ deleted });
+    await db
+      .update(users)
+      .set({ dailyResetAt: new Date() })
+      .where(eq(users.id, user.id));
+    return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof Response) return err;
     return NextResponse.json(

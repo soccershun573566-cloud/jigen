@@ -67,10 +67,14 @@ export function ResetTodayButton() {
         <DialogContent className="border-jigen-border-soft bg-jigen-bg-panel text-jigen-ink">
           <DialogHeader>
             <DialogTitle className="text-jigen-ink">今日の進捗をリセットしますか?</DialogTitle>
-            <DialogDescription className="text-jigen-ink-soft">
-              今日(0時以降)の解答記録を削除し、進捗を 0 に戻します。
-              <br />
-              もう一度はじめから解き直せます。
+            <DialogDescription className="text-jigen-ink-soft space-y-2">
+              <span className="block">今日解いた問題数の表示だけが 0 に戻ります。</span>
+              <span className="block text-jigen-gold">
+                ✅ 間違いリスト / 分析データ / 学習履歴 は 一切 削除されません。
+              </span>
+              <span className="block text-xs text-jigen-ink-mute">
+                リセット後の演習から、 改めて今日の問題数がカウントされます。
+              </span>
             </DialogDescription>
           </DialogHeader>
 

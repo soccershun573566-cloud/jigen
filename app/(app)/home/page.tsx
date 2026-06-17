@@ -257,12 +257,16 @@ async function getTodaySolved(userId: string): Promise<number> {
   try {
     // 今日(JST)分の attempts 数 — ただし source='daily' のみカウント
     // (間違えリストからの解答は加算しない)
+    // さらに、 users.daily_reset_at が立っていれば、 その時刻以降のものだけ
+    // (リセットは attempts を削除せず表示カウンタだけ 0 に戻す方式)
     const result = await db.execute(sql`
       select count(*)::int as c
-      from attempts
-      where user_id = ${userId}
-        and source = 'daily'
-        and attempted_at >= (date_trunc('day', now() at time zone 'Asia/Tokyo') at time zone 'Asia/Tokyo')
+      from attempts a
+      left join users u on u.id = a.user_id
+      where a.user_id = ${userId}
+        and a.source = 'daily'
+        and a.attempted_at >= (date_trunc('day', now() at time zone 'Asia/Tokyo') at time zone 'Asia/Tokyo')
+        and (u.daily_reset_at is null or a.attempted_at > u.daily_reset_at)
     `);
     const rows = (result as unknown as { rows?: { c: number }[] }).rows
       ?? (result as unknown as { c: number }[]);
