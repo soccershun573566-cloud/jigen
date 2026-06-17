@@ -54,7 +54,7 @@ for (const r of probs) {
 const out = {
   mock_exam_id: 'pre-exam-2026-07',
   title: '1級建築施工管理 本番直前模試(50問)',
-  description: '2026年7月の1次試験を直前に控えたβテスター限定の本番形式模試。 開催期間: 2026年7月1日(水)〜7月14日(火)。',
+  description: '2026年7月の1次試験を直前に控えた本番形式模試。 開催期間: 2026年7月1日(水)〜7月14日(火)。',
   available_from: '2026-07-01T00:00:00+09:00',
   available_until: '2026-07-14T23:59:59+09:00',
   questions_count: questions.length,
