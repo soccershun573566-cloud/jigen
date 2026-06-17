@@ -15,10 +15,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Home, Shuffle, Timer, Target, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { InterruptDialog } from '@/components/practice/InterruptDialog';
+import { ResetTodayButton } from '@/components/practice/ResetTodayButton';
 import { TiranoSensei } from '@/components/mascot/TiranoSensei';
 import { ReportButton } from '@/components/practice/ReportButton';
 import { cn } from '@/lib/utils';
 import type { AttemptSubmitResponse } from '@/types/api';
+import { clearResume, updateResumeSelection } from '@/lib/practice/resume-storage';
 
 export type RunnerQuestion = {
   id: string;
@@ -189,7 +191,10 @@ export function PracticeRunner({
   source = 'daily',
   todaySolved,
   todayTarget,
+  initialSelectedIdx = null,
+  initialSelectedNums = [],
   onAnsweredDaily,
+  onTodayReset,
 }: {
   question: RunnerQuestion;
   /** 「次の問題へ」を URLナビなしで即時切替するための親コールバック(任意) */
@@ -200,8 +205,14 @@ export function PracticeRunner({
   todaySolved?: number;
   /** 今日の目標問題数 */
   todayTarget?: number;
+  /** 中断状態から再開時の初期選択(四肢択一の選択肢インデックス・0始まり) */
+  initialSelectedIdx?: number | null;
+  /** 中断状態から再開時の初期選択(応用の選択肢インデックス集合・0始まり) */
+  initialSelectedNums?: number[];
   /** 解答送信成功時に親側で楽観的に +1 するためのコールバック(daily のみ) */
   onAnsweredDaily?: () => void;
+  /** 「今日の進捗」 リセット成功時のコールバック(親が todaySolved を0に) */
+  onTodayReset?: () => void;
 }) {
   const router = useRouter();
 
@@ -209,8 +220,8 @@ export function PracticeRunner({
   const requiredAnswers = question.choices.length >= 5 ? 2 : 1;
   const isMulti = requiredAnswers >= 2;
 
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
-  const [selectedSet, setSelectedSet] = useState<Set<number>>(() => new Set());
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(initialSelectedIdx);
+  const [selectedSet, setSelectedSet] = useState<Set<number>>(() => new Set(initialSelectedNums));
   const [phase, setPhase] = useState<Phase>('answering');
   const [result, setResult] = useState<AttemptSubmitResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -239,15 +250,17 @@ export function PracticeRunner({
           next.delete(idx);
         } else {
           if (next.size >= requiredAnswers) {
-            // 3つ目を押した場合: 最も古い1つを外すよりも、最大数で打ち止めにする方が明確
             return prev;
           }
           next.add(idx);
         }
+        // 中断状態として保存(0始まりインデックスのまま)
+        updateResumeSelection(null, Array.from(next));
         return next;
       });
     } else {
       setSelectedIdx(idx);
+      updateResumeSelection(idx, []);
     }
   }
 
@@ -290,6 +303,8 @@ export function PracticeRunner({
       const data = (await res.json()) as AttemptSubmitResponse;
       setResult(data);
       setPhase('judged');
+      // 採点完了 → 中断再開用の状態は不要
+      clearResume();
       // 楽観: source='daily' の場合のみ今日の進捗を +1(親に通知)
       if (source === 'daily' && onAnsweredDaily) onAnsweredDaily();
     } catch (e) {
@@ -332,9 +347,14 @@ export function PracticeRunner({
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 py-5 text-jigen-ink">
-      {/* 上部1段目: 中断 / 教科ラベル */}
+      {/* 上部1段目: 中断 / リセット / 教科ラベル */}
       <div className="flex items-center justify-between gap-2">
-        <InterruptDialog />
+        <div className="flex items-center gap-1">
+          <InterruptDialog />
+          {source === 'daily' && onTodayReset ? (
+            <ResetTodayButton onReset={onTodayReset} />
+          ) : null}
+        </div>
         <span className="text-[10px] uppercase tracking-widest text-jigen-ink-mute">
           {question.section} / {question.subTopic}
         </span>

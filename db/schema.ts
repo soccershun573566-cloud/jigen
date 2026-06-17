@@ -60,6 +60,8 @@ export const users = pgTable('users', {
   timezone: text('timezone').notNull().default('Asia/Tokyo'),
   notificationMorningAt: time('notification_morning_at').default('07:00'),
   notificationEnabled: boolean('notification_enabled').notNull().default(true),
+  // 今日の進捗カウンタのリセット時刻(null=リセット履歴なし、 値あり=以降のattemptsだけカウント)
+  dailyResetAt: timestamp('daily_reset_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

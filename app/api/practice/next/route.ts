@@ -60,6 +60,7 @@ async function getUserMetrics(userId: string): Promise<{
   const [usersR, countR] = await Promise.all([
     db.execute(sql`
       select daily_target_questions,
+             daily_reset_at,
              case when target_exam_date is null then null
                   else (target_exam_date - current_date)::int end as days_left
       from users where id = ${userId} limit 1
@@ -70,10 +71,12 @@ async function getUserMetrics(userId: string): Promise<{
         count(*) filter (where q.is_applied = true)::int as applied
       from attempts a
       left join questions q on q.id = a.question_id
+      left join users u on u.id = a.user_id
       where a.user_id = ${userId}
         and a.source = 'daily'
         and (a.attempted_at at time zone 'Asia/Tokyo')::date
             = (now() at time zone 'Asia/Tokyo')::date
+        and (u.daily_reset_at is null or a.attempted_at > u.daily_reset_at)
     `).catch(() => null),
   ]);
 

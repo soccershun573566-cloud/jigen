@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { PracticeRunner, type RunnerQuestion } from '@/components/practice/PracticeRunner';
 import type { PracticeNextResponse } from '@/types/api';
 import { QUEUE_KEY } from '@/lib/practice/queue';
+import { readResume, clearResume, writeResume } from '@/lib/practice/resume-storage';
 
 type Phase = 'loading' | 'error' | 'ready';
 
@@ -122,6 +123,9 @@ export default function PracticeRandomPage() {
   // ジゲンAI v2: 今日の進捗(楽観更新)
   const [todaySolved, setTodaySolved] = useState<number | undefined>(undefined);
   const [todayTarget, setTodayTarget] = useState<number | undefined>(undefined);
+  // 中断状態から再開時に渡す初期選択
+  const [initialSelectedIdx, setInitialSelectedIdx] = useState<number | null>(null);
+  const [initialSelectedNums, setInitialSelectedNums] = useState<number[]>([]);
   const refillingRef = useRef(false);
 
   useEffect(() => {
@@ -131,12 +135,24 @@ export default function PracticeRandomPage() {
 
     (async () => {
       try {
-        // 1) sessionStorage から取り出し試行
-        const queue = readQueue();
+        // 0) 中断状態 (localStorage) があれば最優先で再開
+        const resume = readResume();
         let chosen: CachedQuestion | null = null;
-        if (queue.length > 0) {
-          chosen = queue.shift()!;
-          writeQueue(queue);
+        let isResumed = false;
+        if (resume?.question) {
+          chosen = resume.question as CachedQuestion;
+          isResumed = true;
+          setInitialSelectedIdx(resume.selectedIdx ?? null);
+          setInitialSelectedNums(resume.selectedNums ?? []);
+        }
+
+        // 1) sessionStorage から取り出し試行
+        if (!chosen) {
+          const queue = readQueue();
+          if (queue.length > 0) {
+            chosen = queue.shift()!;
+            writeQueue(queue);
+          }
         }
 
         // 2) キューが空なら API で 1問取得
@@ -151,6 +167,10 @@ export default function PracticeRandomPage() {
         // サーバの今日の進捗で同期(キャッシュより新鮮)
         if (typeof chosen.todaySolved === 'number') setTodaySolved(chosen.todaySolved);
         if (typeof chosen.todayTarget === 'number') setTodayTarget(chosen.todayTarget);
+        // 新規問題なら中断状態として保存(選択は空)
+        if (!isResumed) {
+          writeResume({ question: chosen, selectedIdx: null, selectedNums: [] });
+        }
         setPhase('ready');
 
         // 3) バックグラウンドでキュー補充(QUEUE_TARGET件まで)
@@ -177,6 +197,8 @@ export default function PracticeRandomPage() {
   // - PracticeRunner は key 変更で unmount/remount → 内部 state 全リセット
   // - 同時にバックグラウンドでキュー補充
   async function handleNextInline() {
+    // 中断状態は次の問題に進む時点でクリア
+    clearResume();
     let queue = readQueue();
     let next: CachedQuestion | null = null;
     if (queue.length > 0) {
@@ -192,6 +214,11 @@ export default function PracticeRandomPage() {
       // (楽観更新で +1 してたが、サーバの集計値が正確なのでこちらで上書き)
       if (typeof next.todaySolved === 'number') setTodaySolved(next.todaySolved);
       if (typeof next.todayTarget === 'number') setTodayTarget(next.todayTarget);
+      // 次の問題を再開対象として保存
+      writeResume({ question: next, selectedIdx: null, selectedNums: [] });
+      // 再開用の初期選択もクリア(新規問題なので0から)
+      setInitialSelectedIdx(null);
+      setInitialSelectedNums([]);
       // バックグラウンドでキュー補充(現在表示中のIDを除外)
       if (!refillingRef.current) {
         refillingRef.current = true;
@@ -212,7 +239,10 @@ export default function PracticeRandomPage() {
         onNext={handleNextInline}
         todaySolved={todaySolved}
         todayTarget={todayTarget}
+        initialSelectedIdx={initialSelectedIdx}
+        initialSelectedNums={initialSelectedNums}
         onAnsweredDaily={() => setTodaySolved((n) => (typeof n === 'number' ? n + 1 : 1))}
+        onTodayReset={() => setTodaySolved(0)}
       />
     );
   }
