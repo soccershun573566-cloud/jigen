@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { clearAllPracticeClientState } from '@/lib/practice/reset-sync';
 
 /**
  * 「今日の進捗をリセット」ボタン。
@@ -38,6 +39,8 @@ export function ResetTodayButton() {
         const j = await res.json().catch(() => null);
         throw new Error(j?.error?.message ?? `HTTP ${res.status}`);
       }
+      // 演習画面と同期するため、 ローカルの進捗キャッシュを一掃
+      clearAllPracticeClientState();
       setOpen(false);
       router.refresh();
     } catch (e) {

@@ -13,6 +13,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { resetSession } from '@/components/practice/PracticeRunner';
+import { clearAllPracticeClientState } from '@/lib/practice/reset-sync';
 
 /**
  * 「今日の進捗をリセット」 ボタン。
@@ -39,12 +40,10 @@ export function ResetTodayButton({ onReset }: { onReset: () => void }) {
         const j = await res.json().catch(() => null);
         throw new Error(j?.error?.message ?? `HTTP ${res.status}`);
       }
-      // 経過時間ストップウォッチも 0:00 に戻す
+      // 演習・ホーム両画面で同期するためのローカル状態クリア
+      clearAllPracticeClientState();
+      // 経過時間ストップウォッチを 0:00 から再カウントできる状態に
       resetSession();
-      // 中断時の引き継ぎ snapshot もクリア
-      if (typeof window !== 'undefined') {
-        try { localStorage.removeItem('jigen_today_solved_snapshot_v1'); } catch {}
-      }
       onReset();
       setOpen(false);
     } catch (e) {
