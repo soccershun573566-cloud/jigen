@@ -121,7 +121,17 @@ export default function PracticeRandomPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [question, setQuestion] = useState<RunnerQuestion | null>(null);
   // ジゲンAI v2: 今日の進捗(楽観更新)
-  const [todaySolved, setTodaySolved] = useState<number | undefined>(undefined);
+  // 中断時に保存された snapshot を初期値に。 サーバ値で上書きするときは Math.max で保護
+  // (INSERT 反映前のサーバ集計が 0 を返しても、 楽観 +1 の値を巻き戻さないため)
+  const [todaySolved, setTodaySolved] = useState<number | undefined>(() => {
+    if (typeof window === 'undefined') return undefined;
+    try {
+      const raw = localStorage.getItem('jigen_today_solved_snapshot_v1');
+      if (raw == null) return undefined;
+      const n = parseInt(raw, 10);
+      return Number.isFinite(n) ? n : undefined;
+    } catch { return undefined; }
+  });
   const [todayTarget, setTodayTarget] = useState<number | undefined>(undefined);
   // 中断状態から再開時に渡す初期選択
   const [initialSelectedIdx, setInitialSelectedIdx] = useState<number | null>(null);
@@ -165,7 +175,11 @@ export default function PracticeRandomPage() {
 
         setQuestion(buildRunnerQuestion(chosen));
         // サーバの今日の進捗で同期(キャッシュより新鮮)
-        if (typeof chosen.todaySolved === 'number') setTodaySolved(chosen.todaySolved);
+        // ただし、 楽観 +1 や中断時 snapshot より小さい値で上書きしないように Math.max で保護
+        if (typeof chosen.todaySolved === 'number') {
+          const serverVal = chosen.todaySolved;
+          setTodaySolved((prev) => typeof prev === 'number' ? Math.max(prev, serverVal) : serverVal);
+        }
         if (typeof chosen.todayTarget === 'number') setTodayTarget(chosen.todayTarget);
         // 新規問題なら中断状態として保存(選択は空)
         if (!isResumed) {
@@ -211,8 +225,11 @@ export default function PracticeRandomPage() {
     if (next) {
       setQuestion(buildRunnerQuestion(next));
       // 次の問題のレスポンスに乗ってきた todaySolved でサーバ同期
-      // (楽観更新で +1 してたが、サーバの集計値が正確なのでこちらで上書き)
-      if (typeof next.todaySolved === 'number') setTodaySolved(next.todaySolved);
+      // ただし楽観 +1 した値より小さい場合は楽観値を維持(サーバの INSERT 反映遅延対策)
+      if (typeof next.todaySolved === 'number') {
+        const serverVal = next.todaySolved;
+        setTodaySolved((prev) => typeof prev === 'number' ? Math.max(prev, serverVal) : serverVal);
+      }
       if (typeof next.todayTarget === 'number') setTodayTarget(next.todayTarget);
       // 次の問題を再開対象として保存
       writeResume({ question: next, selectedIdx: null, selectedNums: [] });

@@ -13,9 +13,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { pauseSession } from '@/components/practice/PracticeRunner';
 
 // 中断モーダル: ユウ§2-(2)「中断ボタン常時表示・進捗自動保存」
-export function InterruptDialog() {
+//   - 中断時に経過時間ストップウォッチも止める(pauseSession)
+//   - 中断前の todaySolved は localStorage に保存され、 再開時に復元
+export function InterruptDialog({ todaySolved }: { todaySolved?: number }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
@@ -44,6 +47,14 @@ export function InterruptDialog() {
           </Button>
           <Button
             onClick={() => {
+              // 経過時間ストップウォッチを停止
+              pauseSession();
+              // 中断時点の todaySolved を保存(再開時に引き継ぐ)
+              if (typeof todaySolved === 'number' && typeof window !== 'undefined') {
+                try {
+                  localStorage.setItem('jigen_today_solved_snapshot_v1', String(todaySolved));
+                } catch { /* QuotaExceededError等は無視 */ }
+              }
               setOpen(false);
               router.push('/home');
             }}

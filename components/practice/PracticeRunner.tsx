@@ -53,7 +53,7 @@ function pickRandom<T>(arr: readonly T[]): T {
 
 // ============= 進捗バー / ストップウォッチ =============
 
-const SESSION_START_KEY_PREFIX = 'jigen_session_start_v1';
+const SESSION_STATE_KEY_PREFIX = 'jigen_session_state_v2';
 
 function getJstDateStr(): string {
   // Asia/Tokyo の YYYY-MM-DD を返す。日付境界(JST 00:00)でセッションリセット用
@@ -62,21 +62,64 @@ function getJstDateStr(): string {
   return new Date(jstMs).toISOString().slice(0, 10);
 }
 
-function getOrCreateSessionStart(): number {
-  if (typeof window === 'undefined') return Date.now();
-  const key = `${SESSION_START_KEY_PREFIX}_${getJstDateStr()}`;
+/**
+ * 経過時間セッション状態。
+ * - baseSec: これまでに累積した秒数(中断時に固定される)
+ * - resumedAt: 現在計測中の開始時刻(null=中断中で計測停止)
+ *   → 表示時刻 = baseSec + (resumedAt ? (now - resumedAt)/1000 : 0)
+ */
+type SessionState = { baseSec: number; resumedAt: number | null };
+
+function sessionKey(): string {
+  return `${SESSION_STATE_KEY_PREFIX}_${getJstDateStr()}`;
+}
+
+export function readSessionState(): SessionState | null {
+  if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(key);
-    if (raw) {
-      const t = parseInt(raw, 10);
-      if (Number.isFinite(t) && t > 0) return t;
-    }
-  } catch {}
-  const now = Date.now();
-  try {
-    localStorage.setItem(key, String(now));
-  } catch {}
-  return now;
+    const raw = localStorage.getItem(sessionKey());
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SessionState;
+    if (typeof parsed?.baseSec !== 'number') return null;
+    return parsed;
+  } catch { return null; }
+}
+
+export function writeSessionState(s: SessionState): void {
+  if (typeof window === 'undefined') return;
+  try { localStorage.setItem(sessionKey(), JSON.stringify(s)); } catch {}
+}
+
+export function getOrCreateSessionState(): SessionState {
+  const cur = readSessionState();
+  if (cur == null) {
+    const s: SessionState = { baseSec: 0, resumedAt: Date.now() };
+    writeSessionState(s);
+    return s;
+  }
+  // 中断中(resumedAt=null) → アクセスした時点で再開
+  if (cur.resumedAt == null) {
+    const s: SessionState = { baseSec: cur.baseSec, resumedAt: Date.now() };
+    writeSessionState(s);
+    return s;
+  }
+  return cur;
+}
+
+export function pauseSession(): void {
+  const cur = readSessionState();
+  if (!cur) return;
+  const extra = cur.resumedAt ? (Date.now() - cur.resumedAt) / 1000 : 0;
+  writeSessionState({ baseSec: cur.baseSec + extra, resumedAt: null });
+}
+
+export function resetSession(): void {
+  writeSessionState({ baseSec: 0, resumedAt: Date.now() });
+}
+
+function calcElapsedSec(s: SessionState): number {
+  if (s.resumedAt == null) return s.baseSec;
+  return s.baseSec + (Date.now() - s.resumedAt) / 1000;
 }
 
 function formatElapsed(totalSeconds: number): string {
@@ -96,11 +139,12 @@ function formatElapsed(totalSeconds: number): string {
 function StopwatchBadge() {
   const [elapsed, setElapsed] = useState<number>(0);
   useEffect(() => {
-    const start = getOrCreateSessionStart();
-    setElapsed(Math.floor((Date.now() - start) / 1000));
-    const id = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - start) / 1000));
-    }, 1000);
+    const tick = () => {
+      const s = getOrCreateSessionState();
+      setElapsed(Math.floor(calcElapsedSec(s)));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
   return (
@@ -350,7 +394,7 @@ export function PracticeRunner({
       {/* 上部1段目: 中断 / リセット / 教科ラベル */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1">
-          <InterruptDialog />
+          <InterruptDialog todaySolved={todaySolved} />
           {source === 'daily' && onTodayReset ? (
             <ResetTodayButton onReset={onTodayReset} />
           ) : null}

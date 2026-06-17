@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { resetSession } from '@/components/practice/PracticeRunner';
 
 /**
  * 「今日の進捗をリセット」 ボタン。
@@ -37,6 +38,12 @@ export function ResetTodayButton({ onReset }: { onReset: () => void }) {
       if (!res.ok) {
         const j = await res.json().catch(() => null);
         throw new Error(j?.error?.message ?? `HTTP ${res.status}`);
+      }
+      // 経過時間ストップウォッチも 0:00 に戻す
+      resetSession();
+      // 中断時の引き継ぎ snapshot もクリア
+      if (typeof window !== 'undefined') {
+        try { localStorage.removeItem('jigen_today_solved_snapshot_v1'); } catch {}
       }
       onReset();
       setOpen(false);
