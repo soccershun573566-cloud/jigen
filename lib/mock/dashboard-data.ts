@@ -107,9 +107,9 @@ export function getHomeV2(): HomeV2Data {
     warning: '注意:法規の正答率が55%を下回っています',
     sidebarItems: [
       { label: 'プロフィール', href: '/profile' },
-      { label: 'AI相談所', href: '/coming-soon/mock-exam' },
-      { label: '◯× クイズ', href: '/coming-soon/mock-exam' },
-      { label: '建築豆知識', href: '/coming-soon/mock-exam' },
+      { label: 'AI相談所', href: '/coming-soon/ai-advisor' },
+      { label: '◯× クイズ', href: '/coming-soon/quiz' },
+      { label: '建築豆知識', href: '/coming-soon/trivia' },
       { label: '間違えリスト', href: '/mistakes' },
     ],
   };
