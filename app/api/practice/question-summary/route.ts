@@ -94,11 +94,65 @@ function parseJsonbField(raw: unknown): unknown {
   return raw;
 }
 
+/**
+ * AI が動かないとき(OPENAI_API_KEY未設定・タイムアウト等) の機械的フォールバック。
+ * 解説文を分割して、 数値部分を穴埋めにマスクする。
+ */
+function buildFallbackSummary(args: {
+  subTopic: string;
+  explanationMd: string;
+}): Summary {
+  const text = (args.explanationMd || '').replace(/\s+/g, ' ').trim();
+  // 文の区切りで分割
+  const sentences = text.split(/[。．.\n]/).map((s) => s.trim()).filter(Boolean);
+  const shortExplanation = (sentences[0] ?? text).slice(0, 100) + (sentences[0] && sentences[0].length > 100 ? '…' : '。');
+  const lastSentence = sentences[sentences.length - 1] ?? text;
+  const keyPoint = (`${args.subTopic} — ${lastSentence}`).slice(0, 80);
+
+  // 数値+単位 を最大3個まで抽出して穴埋め化
+  const NUM_RE = /(\d+(?:\.\d+)?)([a-zA-Z%℃°°]?[a-zA-Z²³³/]*)/g;
+  const baseSrc = sentences[0] ?? text;
+  const masks: Array<{ idx: number; answer: string; aliases: string[] }> = [];
+  let masked = '';
+  let lastIdx = 0;
+  let count = 0;
+  for (;;) {
+    const m = NUM_RE.exec(baseSrc);
+    if (!m || count >= 3) break;
+    const num = m[1] ?? '';
+    const unit = m[2] ?? '';
+    masked += baseSrc.slice(lastIdx, m.index) + `[_${count + 1}_]`;
+    if (unit) masked += unit;
+    lastIdx = m.index + m[0].length;
+    const aliases: string[] = unit ? [`${num}${unit}`] : [];
+    masks.push({ idx: count + 1, answer: num, aliases });
+    count++;
+  }
+  masked += baseSrc.slice(lastIdx);
+
+  // 数値が無い場合は最初の重要そうな名詞を穴埋め化
+  if (masks.length === 0) {
+    const words = baseSrc.split(/[、,\s]/).filter((w) => w.length >= 2);
+    if (words.length > 0) {
+      const w = words[0]!;
+      masked = baseSrc.replace(w, '[_1_]');
+      masks.push({ idx: 1, answer: w, aliases: [] });
+    } else {
+      masked = baseSrc;
+      masks.push({ idx: 1, answer: text.slice(0, 10), aliases: [] });
+    }
+  }
+
+  return {
+    shortExplanation,
+    keyPoint,
+    fillInQuestion: masked.slice(0, 200),
+    fillInAnswers: masks,
+  };
+}
+
 export async function POST(req: Request) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json({ error: { code: 'config_error', message: 'OPENAI_API_KEY missing' } }, { status: 500 });
-    }
     await requireUser();
     const parsed = Body.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {
@@ -130,51 +184,63 @@ export async function POST(req: Request) {
     const choicesArr = (parseJsonbField(q.choices) as string[]) ?? [];
     const correctText = parseAnswerText(q.answer, choicesArr);
 
-    // AI生成
-    const prompt = buildPrompt({
-      section: q.section,
-      subTopic: q.subTopic,
-      bodyMd: q.bodyMd,
-      choices: choicesArr,
-      correctText,
-      explanationMd: q.explanationMd,
-    });
+    // AI 生成を試みる。 失敗時は機械的フォールバックで継続(UIが落ちないように)
+    let summary: Summary;
+    let usedFallback = false;
 
-    const { text } = await generateText({
-      model: openai('gpt-4o-mini'),
-      prompt,
-      temperature: 0.3,
-    });
+    if (process.env.OPENAI_API_KEY) {
+      try {
+        const prompt = buildPrompt({
+          section: q.section,
+          subTopic: q.subTopic,
+          bodyMd: q.bodyMd,
+          choices: choicesArr,
+          correctText,
+          explanationMd: q.explanationMd,
+        });
 
-    // JSON 抽出(LLMが前後にゴミを付けた場合に備える)
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('AI response did not contain JSON');
+        const { text } = await generateText({
+          model: openai('gpt-4o-mini'),
+          prompt,
+          temperature: 0.3,
+        });
+
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('AI response did not contain JSON');
+
+        const payload = JSON.parse(jsonMatch[0]) as {
+          short_explanation?: string;
+          key_point?: string;
+          fill_in_question?: string;
+          fill_in_answers?: Array<{ idx?: number; answer?: string; aliases?: string[] }>;
+        };
+
+        const shortExplanation = String(payload.short_explanation ?? '').trim();
+        const keyPoint = String(payload.key_point ?? '').trim();
+        const fillInQuestion = String(payload.fill_in_question ?? '').trim();
+        const fillInAnswers = Array.isArray(payload.fill_in_answers)
+          ? payload.fill_in_answers.map((x) => ({
+              idx: typeof x.idx === 'number' ? x.idx : 0,
+              answer: String(x.answer ?? '').trim(),
+              aliases: Array.isArray(x.aliases) ? x.aliases.map((a) => String(a).trim()).filter(Boolean) : [],
+            })).filter((x) => x.idx > 0 && x.answer.length > 0)
+          : [];
+
+        if (!shortExplanation || !keyPoint || !fillInQuestion || fillInAnswers.length === 0) {
+          throw new Error('AI response missing required fields');
+        }
+        summary = { shortExplanation, keyPoint, fillInQuestion, fillInAnswers };
+      } catch (e) {
+        console.error('[question-summary] AI failed, using fallback:', (e as Error).message);
+        summary = buildFallbackSummary({ subTopic: q.subTopic, explanationMd: q.explanationMd });
+        usedFallback = true;
+      }
+    } else {
+      summary = buildFallbackSummary({ subTopic: q.subTopic, explanationMd: q.explanationMd });
+      usedFallback = true;
     }
-    let payload: {
-      short_explanation?: string;
-      key_point?: string;
-      fill_in_question?: string;
-      fill_in_answers?: Array<{ idx?: number; answer?: string; aliases?: string[] }>;
-    };
-    try { payload = JSON.parse(jsonMatch[0]); }
-    catch { throw new Error('AI response JSON parse failed'); }
 
-    const shortExplanation = String(payload.short_explanation ?? '').trim();
-    const keyPoint = String(payload.key_point ?? '').trim();
-    const fillInQuestion = String(payload.fill_in_question ?? '').trim();
-    const fillInAnswers = Array.isArray(payload.fill_in_answers)
-      ? payload.fill_in_answers.map((x) => ({
-          idx: typeof x.idx === 'number' ? x.idx : 0,
-          answer: String(x.answer ?? '').trim(),
-          aliases: Array.isArray(x.aliases) ? x.aliases.map((a) => String(a).trim()).filter(Boolean) : [],
-        })).filter((x) => x.idx > 0 && x.answer.length > 0)
-      : [];
-    if (!shortExplanation || !keyPoint || !fillInQuestion || fillInAnswers.length === 0) {
-      throw new Error('AI response missing required fields');
-    }
-
-    const summary: Summary = { shortExplanation, keyPoint, fillInQuestion, fillInAnswers };
+    const { shortExplanation, keyPoint, fillInQuestion, fillInAnswers } = summary;
 
     // DBキャッシュ
     await db
@@ -197,7 +263,7 @@ export async function POST(req: Request) {
         },
       });
 
-    return NextResponse.json({ ...summary, cached: false });
+    return NextResponse.json({ ...summary, cached: false, usedFallback });
   } catch (err) {
     if (err instanceof Response) return err;
     return NextResponse.json(

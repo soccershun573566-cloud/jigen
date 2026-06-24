@@ -49,7 +49,7 @@ type QuestionRow = {
 type PhaseWeights = { review: number; srs: number; adaptive: number };
 
 const DEFAULT_TODAY_TARGET = 25;
-const APPLIED_RATIO = 0.3;
+const APPLIED_RATIO = 0.2;
 
 async function getUserMetrics(userId: string): Promise<{
   todayTarget: number;

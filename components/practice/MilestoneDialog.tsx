@@ -99,16 +99,29 @@ function MistakeCard({ mistake }: { mistake: MilestoneMistake }) {
         credentials: 'include',
         body: JSON.stringify({ questionId: mistake.questionId }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const detail = data?.error?.message || `サーバエラー (${res.status})`;
+        throw new Error(detail);
+      }
+      if (!data?.shortExplanation || !data?.keyPoint) {
+        throw new Error('解説データが不完全です');
+      }
       setSummary({
         shortExplanation: data.shortExplanation,
         keyPoint: data.keyPoint,
-        fillInQuestion: data.fillInQuestion,
-        fillInAnswers: data.fillInAnswers,
+        fillInQuestion: data.fillInQuestion ?? '',
+        fillInAnswers: Array.isArray(data.fillInAnswers) ? data.fillInAnswers : [],
       });
     } catch (e) {
-      setErrorMsg((e as Error).message || '解説を読み込めませんでした');
+      // フォールバック: 元の解説をそのまま表示
+      setSummary({
+        shortExplanation: mistake.explanationMd?.slice(0, 100) || '解説は準備中です。',
+        keyPoint: `${mistake.subTopic} の問題です。 解説を読み返してみましょう。`,
+        fillInQuestion: '',
+        fillInAnswers: [],
+      });
+      console.error('[question-summary] fallback used:', (e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -171,7 +184,7 @@ function MistakeCard({ mistake }: { mistake: MilestoneMistake }) {
             </p>
           </div>
 
-          {!fillOpen ? (
+          {!fillOpen && summary.fillInQuestion && summary.fillInAnswers.length > 0 ? (
             <button
               type="button"
               onClick={() => setFillOpen(true)}
@@ -180,7 +193,8 @@ function MistakeCard({ mistake }: { mistake: MilestoneMistake }) {
               <PenLine className="h-3 w-3" />
               穴埋めで定着
             </button>
-          ) : (
+          ) : null}
+          {fillOpen && summary.fillInQuestion && summary.fillInAnswers.length > 0 ? (
             <div className="space-y-2 rounded-md border border-jigen-gold/40 bg-jigen-bg-panel p-3">
               <p className="text-[10px] uppercase tracking-widest text-jigen-gold">穴埋め小テスト</p>
               <div className="text-[12px] leading-relaxed text-jigen-ink">
@@ -226,7 +240,7 @@ function MistakeCard({ mistake }: { mistake: MilestoneMistake }) {
                 </p>
               )}
             </div>
-          )}
+          ) : null}
         </>
       ) : null}
 
