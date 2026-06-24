@@ -14,6 +14,7 @@ import { PracticeRunner, type RunnerQuestion } from '@/components/practice/Pract
 import type { PracticeNextResponse } from '@/types/api';
 import { QUEUE_KEY } from '@/lib/practice/queue';
 import { readResume, clearResume, writeResume } from '@/lib/practice/resume-storage';
+import { MilestoneDialog, type MilestoneData } from '@/components/practice/MilestoneDialog';
 
 type Phase = 'loading' | 'error' | 'ready';
 
@@ -136,7 +137,11 @@ export default function PracticeRandomPage() {
   // 中断状態から再開時に渡す初期選択
   const [initialSelectedIdx, setInitialSelectedIdx] = useState<number | null>(null);
   const [initialSelectedNums, setInitialSelectedNums] = useState<number[]>([]);
+  // 25問区切り画面の表示状態
+  const [milestoneData, setMilestoneData] = useState<MilestoneData | null>(null);
+  const [milestoneOpen, setMilestoneOpen] = useState(false);
   const refillingRef = useRef(false);
+  const milestoneCheckingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -206,6 +211,41 @@ export default function PracticeRandomPage() {
     };
   }, [reloadKey, tQuery]);
 
+  // 25問区切りチェック: 解答完了直後に呼び出し、 該当ならダイアログ表示
+  async function checkMilestone() {
+    if (milestoneCheckingRef.current) return;
+    milestoneCheckingRef.current = true;
+    try {
+      const res = await fetch('/api/practice/milestone', { cache: 'no-store', credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.shouldShow) {
+        setMilestoneData({
+          currentMilestone: data.currentMilestone,
+          todaySolved: data.todaySolved,
+          questionsInWindow: data.questionsInWindow,
+          mistakesCount: data.mistakesCount,
+          mistakes: data.mistakes,
+        });
+        setMilestoneOpen(true);
+      }
+    } catch { /* 失敗しても問題なし */ }
+    finally {
+      milestoneCheckingRef.current = false;
+    }
+  }
+
+  async function markMilestoneSeen(milestone: number) {
+    try {
+      await fetch('/api/practice/milestone/mark-seen', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ milestone }),
+      });
+    } catch { /* 失敗してもUIは進める */ }
+  }
+
   // 「次の問題へ」を URLナビなしで瞬間切替する
   // - キュー先頭から取り出して新 question を state にセット
   // - PracticeRunner は key 変更で unmount/remount → 内部 state 全リセット
@@ -250,17 +290,29 @@ export default function PracticeRandomPage() {
     // key に question.id を渡して、問題切替時に PracticeRunner を unmount/remount させる
     // (これがないと selectedIdx, phase, result などの state が前問のまま残ってしまう)
     return (
-      <PracticeRunner
-        key={question.id}
-        question={question}
-        onNext={handleNextInline}
-        todaySolved={todaySolved}
-        todayTarget={todayTarget}
-        initialSelectedIdx={initialSelectedIdx}
-        initialSelectedNums={initialSelectedNums}
-        onAnsweredDaily={() => setTodaySolved((n) => (typeof n === 'number' ? n + 1 : 1))}
-        onTodayReset={() => setTodaySolved(0)}
-      />
+      <>
+        <PracticeRunner
+          key={question.id}
+          question={question}
+          onNext={handleNextInline}
+          todaySolved={todaySolved}
+          todayTarget={todayTarget}
+          initialSelectedIdx={initialSelectedIdx}
+          initialSelectedNums={initialSelectedNums}
+          onAnsweredDaily={() => {
+            setTodaySolved((n) => (typeof n === 'number' ? n + 1 : 1));
+            // 楽観 +1 後、 25問区切り判定をサーバに問い合わせ
+            void checkMilestone();
+          }}
+          onTodayReset={() => setTodaySolved(0)}
+        />
+        <MilestoneDialog
+          open={milestoneOpen}
+          data={milestoneData}
+          onClose={() => setMilestoneOpen(false)}
+          onMarkSeen={markMilestoneSeen}
+        />
+      </>
     );
   }
 

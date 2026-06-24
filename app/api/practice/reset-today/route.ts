@@ -21,7 +21,7 @@ export async function POST() {
     const user = await requireUser();
     await db
       .update(users)
-      .set({ dailyResetAt: new Date() })
+      .set({ dailyResetAt: new Date(), lastMilestoneSeen: 0 })
       .where(eq(users.id, user.id));
     return NextResponse.json({ ok: true });
   } catch (err) {

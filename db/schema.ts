@@ -62,6 +62,8 @@ export const users = pgTable('users', {
   notificationEnabled: boolean('notification_enabled').notNull().default(true),
   // 今日の進捗カウンタのリセット時刻(null=リセット履歴なし、 値あり=以降のattemptsだけカウント)
   dailyResetAt: timestamp('daily_reset_at', { withTimezone: true }),
+  // 25問ごとの区切り画面で「最後に見た節目」(0=未到達、1=25問達成、2=50問、…)
+  lastMilestoneSeen: integer('last_milestone_seen').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
