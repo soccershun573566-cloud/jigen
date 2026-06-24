@@ -91,6 +91,17 @@ export const questions = pgTable('questions', {
   yearQUnique: uniqueIndex('questions_year_q_unique').on(t.year, t.qNumber),
 }));
 
+// ============ question_summaries(AI生成キャッシュ) ============
+export const questionSummaries = pgTable('question_summaries', {
+  questionId: uuid('question_id').primaryKey().references(() => questions.id, { onDelete: 'cascade' }),
+  shortExplanation: text('short_explanation').notNull(),
+  keyPoint: text('key_point').notNull(),
+  fillInQuestion: text('fill_in_question').notNull(),
+  fillInAnswers: jsonb('fill_in_answers').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 // ============ daily_tasks ============
 export const dailyTasks = pgTable('daily_tasks', {
   id: uuid('id').primaryKey().defaultRandom(),

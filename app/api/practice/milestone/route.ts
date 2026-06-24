@@ -17,7 +17,6 @@ import { NextResponse } from 'next/server';
 import { sql } from 'drizzle-orm';
 import { requireUser } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { parseAnswerToValue, parseAnswerToArray } from '@/lib/learning/scoring';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -34,6 +33,10 @@ type MistakeRow = {
   explanation_md: string;
   user_answer: unknown;
   attempted_at: string;
+  short_explanation: string | null;
+  key_point: string | null;
+  fill_in_question: string | null;
+  fill_in_answers: unknown;
 };
 
 function parseJsonbField<T = unknown>(raw: unknown): T {
@@ -104,9 +107,12 @@ export async function GET() {
       )
       select q.id as question_id, q.section, q.sub_topic, q.body_md,
              q.choices, q.answer, q.explanation_md,
-             ta.user_answer, ta.attempted_at
+             ta.user_answer, ta.attempted_at,
+             qs.short_explanation, qs.key_point,
+             qs.fill_in_question, qs.fill_in_answers
       from target_attempts ta
       join questions q on q.id = ta.question_id
+      left join question_summaries qs on qs.question_id = q.id
       where ta.is_correct = false
       order by ta.attempted_at asc
     `);
@@ -119,23 +125,20 @@ export async function GET() {
       const choicesArr = Array.isArray(choices)
         ? choices
         : (choices && typeof choices === 'object' && Array.isArray(choices.items) ? choices.items : []);
-      // 正解番号(配列 or 単一)
-      const correctArr = parseAnswerToArray(r.answer);
-      const correctNum = correctArr ? null : parseAnswerToValue(r.answer);
-      // ユーザー解答番号
-      const userParsed = parseJsonbField<unknown>(r.user_answer);
-      const userVal = userParsed && typeof userParsed === 'object' && 'value' in (userParsed as Record<string, unknown>)
-        ? (userParsed as { value: unknown }).value
-        : userParsed;
       return {
         questionId: r.question_id,
         section: r.section,
         subTopic: r.sub_topic,
         bodyMd: r.body_md,
         choices: choicesArr,
-        correctAnswer: correctArr ?? correctNum,
-        userAnswer: userVal,
         explanationMd: r.explanation_md,
+        // サマリ(AI生成キャッシュ・なければ null) — クライアント側で個別取得を試みる
+        shortExplanation: r.short_explanation,
+        keyPoint: r.key_point,
+        fillInQuestion: r.fill_in_question,
+        fillInAnswers: r.fill_in_answers
+          ? (parseJsonbField(r.fill_in_answers) as Array<{ idx: number; answer: string; aliases: string[] }>)
+          : null,
       };
     });
 
