@@ -57,8 +57,16 @@ ${args.explanationMd}
 【生成ルール】
 1. short_explanation: 上記解説を 1〜2文・80字以内 に圧縮(平易な日本語)
 2. key_point: 受験生が試験まで覚えておくべき要点を 1文・60字以内 で。 「〜は〜である」「〜の最小値は〜」 のような知識として記述
-3. fill_in_question: 同じ知識を確認する穴埋め問題文を 1つ 作成。 空欄は 2〜3 個。 空欄は半角 [_1_], [_2_], [_3_] の形式で表記
-4. fill_in_answers: 各空欄の正解と、 受験生が書きそうな別表記(aliases)。 数値の場合は単位込み・単位なし両方を aliases に含める
+3. fill_in_question: 同じ知識を確認する穴埋め問題文を 1つ 作成。 空欄は 2〜3 個必須。 空欄は半角 [_1_], [_2_], [_3_] の形式で表記
+   - 空欄にする対象は次の優先順位で選ぶ:
+     (a) 数値+単位 (例: 「3.0 N/mm²」 「270 kg/m³」)
+     (b) 専門用語・固有名詞 (例: 「コールドジョイント」「保有耐力接合」「セメントペースト」)
+     (c) 重要キーワード (例: 「最小値」「短くする」「先行する」)
+   - 数値だけに偏らず、 必ず最低1つは 用語・キーワードを含めること
+   - 試験で問われやすい知識(覚えるべき要点)を空欄にする
+4. fill_in_answers: 各空欄の正解と、 受験生が書きそうな別表記(aliases)
+   - 数値: 単位込み・単位なし両方を aliases に
+   - 用語: 漢字/かな表記の揺れ・略称・別名(例: 「鉄筋コンクリート」 → aliases:["RC", "鉄筋コンクリート造"])
 
 【出力形式】 必ず以下の JSON のみを返してください(コードブロックや前置きは禁止):
 {
@@ -96,43 +104,96 @@ function parseJsonbField(raw: unknown): unknown {
 
 /**
  * AI が動かないとき(OPENAI_API_KEY未設定・タイムアウト等) の機械的フォールバック。
- * 解説文を分割して、 数値部分を穴埋めにマスクする。
+ * 解説文から数値・専門用語を抽出して穴埋め化する。
  */
+
+// 1級建築施工管理技士でよく出る専門用語の辞書(優先的に空欄化する)
+const TERM_DICT: string[] = [
+  // コンクリート
+  'コンクリート', 'コールドジョイント', 'ワーカビリティー', 'スランプ', 'レイタンス',
+  'ブリーディング', 'セメントペースト', 'モルタル', 'AE減水剤', '骨材', '細骨材率',
+  '養生', '湿潤養生', '寒中コンクリート', '暑中コンクリート', '高強度コンクリート',
+  '水セメント比', '単位セメント量', '単位水量', '塩化物イオン', '空気量',
+  // 鉄筋・鉄骨
+  'ガス圧接', '機械式継手', '重ね継手', 'かぶり厚さ', 'スターラップ', 'あばら筋',
+  '高力ボルト', '保有耐力接合', '完全溶込み溶接', 'すみ肉溶接', '溶接金属',
+  // 仮設・型枠
+  'せき板', '支保工', '型枠', '建入れ直し', '建方', '足場', '乗入れ構台',
+  // 仕上げ・防水
+  '改質アスファルト', 'シーリング', 'タイル', '密着工法', '改良圧着', 'モザイクタイル',
+  '塗膜防水', 'アスファルト防水', 'ルーフィング',
+  // 法規・管理
+  '主任技術者', '監理技術者', '施工体制台帳', 'クリティカルパス', 'フリーフロート',
+  'トータルフロート', 'ネットワーク工程表', 'バーチャート',
+];
+
+function findTerms(text: string): Array<{ term: string; index: number }> {
+  const hits: Array<{ term: string; index: number }> = [];
+  for (const term of TERM_DICT) {
+    const i = text.indexOf(term);
+    if (i >= 0) hits.push({ term, index: i });
+  }
+  // 出現位置順
+  hits.sort((a, b) => a.index - b.index);
+  return hits;
+}
+
 function buildFallbackSummary(args: {
   subTopic: string;
   explanationMd: string;
 }): Summary {
   const text = (args.explanationMd || '').replace(/\s+/g, ' ').trim();
-  // 文の区切りで分割
   const sentences = text.split(/[。．.\n]/).map((s) => s.trim()).filter(Boolean);
-  const shortExplanation = (sentences[0] ?? text).slice(0, 100) + (sentences[0] && sentences[0].length > 100 ? '…' : '。');
+  const firstSentence = sentences[0] ?? text;
+  const shortExplanation = firstSentence.slice(0, 100) + (firstSentence.length > 100 ? '…' : '。');
   const lastSentence = sentences[sentences.length - 1] ?? text;
   const keyPoint = (`${args.subTopic} — ${lastSentence}`).slice(0, 80);
 
-  // 数値+単位 を最大3個まで抽出して穴埋め化
-  const NUM_RE = /(\d+(?:\.\d+)?)([a-zA-Z%℃°°]?[a-zA-Z²³³/]*)/g;
-  const baseSrc = sentences[0] ?? text;
-  const masks: Array<{ idx: number; answer: string; aliases: string[] }> = [];
-  let masked = '';
-  let lastIdx = 0;
-  let count = 0;
-  for (;;) {
-    const m = NUM_RE.exec(baseSrc);
-    if (!m || count >= 3) break;
-    const num = m[1] ?? '';
-    const unit = m[2] ?? '';
-    masked += baseSrc.slice(lastIdx, m.index) + `[_${count + 1}_]`;
-    if (unit) masked += unit;
-    lastIdx = m.index + m[0].length;
-    const aliases: string[] = unit ? [`${num}${unit}`] : [];
-    masks.push({ idx: count + 1, answer: num, aliases });
-    count++;
-  }
-  masked += baseSrc.slice(lastIdx);
+  // 穴埋め対象を「数値+単位 / 専門用語」 の混合で最大3つ抽出
+  const NUM_RE = /(\d+(?:\.\d+)?)([a-zA-Z%℃°]?[a-zA-Z²³/]*)/g;
+  const baseSrc = firstSentence;
 
-  // 数値が無い場合は最初の重要そうな名詞を穴埋め化
+  type Mask = { start: number; end: number; answer: string; aliases: string[]; kind: 'num' | 'term' };
+  const candidates: Mask[] = [];
+
+  // 1) 数値+単位 を候補に追加
+  let nm: RegExpExecArray | null;
+  while ((nm = NUM_RE.exec(baseSrc))) {
+    const num = nm[1] ?? '';
+    const unit = nm[2] ?? '';
+    const answer = num + unit;
+    const aliases = unit ? [num] : [];
+    candidates.push({ start: nm.index, end: nm.index + nm[0].length, answer, aliases, kind: 'num' });
+  }
+
+  // 2) 専門用語 を候補に追加
+  for (const { term, index } of findTerms(baseSrc)) {
+    candidates.push({ start: index, end: index + term.length, answer: term, aliases: [], kind: 'term' });
+  }
+
+  // 出現順にソート・先頭3つまで・重複(被り) を除外
+  candidates.sort((a, b) => a.start - b.start);
+  const picked: Mask[] = [];
+  for (const c of candidates) {
+    if (picked.some((p) => !(c.end <= p.start || c.start >= p.end))) continue; // 重複範囲
+    picked.push(c);
+    if (picked.length >= 3) break;
+  }
+
+  // 穴埋め文を組み立て
+  let masked = '';
+  const masks: Array<{ idx: number; answer: string; aliases: string[] }> = [];
+  let last = 0;
+  picked.forEach((p, i) => {
+    masked += baseSrc.slice(last, p.start) + `[_${i + 1}_]`;
+    last = p.end;
+    masks.push({ idx: i + 1, answer: p.answer, aliases: p.aliases });
+  });
+  masked += baseSrc.slice(last);
+
+  // 1個も抽出できなかった場合は最後の砦: 最初の名詞っぽい単語を穴埋め
   if (masks.length === 0) {
-    const words = baseSrc.split(/[、,\s]/).filter((w) => w.length >= 2);
+    const words = baseSrc.split(/[、,\s。．・]/).filter((w) => w.length >= 2);
     if (words.length > 0) {
       const w = words[0]!;
       masked = baseSrc.replace(w, '[_1_]');
